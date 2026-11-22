@@ -1,6 +1,8 @@
+from types import SimpleNamespace
 from fastapi.testclient import TestClient
 from uuid import uuid4
 
+from municipal_assistant.accounts.security import digest_secret
 from municipal_assistant.app import create_app
 
 
@@ -25,3 +27,28 @@ def test_metadata_request_body_is_bounded_before_json_parsing():
         headers={"If-Match": '"1"', "Content-Type": "application/json"},
         content=b"{" + b" " * 20_000 + b"}")
     assert response.status_code == 413
+
+
+def test_document_mutation_requires_the_active_session_csrf_token():
+    app = create_app()
+    account = SimpleNamespace(id=uuid4())
+    session = SimpleNamespace(csrf_hash=digest_secret("expected-csrf"))
+
+    class Accounts:
+        settings = SimpleNamespace(auth_enabled=True, session_cookie_name="test-session",
+                                   csrf_cookie_name="test-csrf")
+
+        def current_session(self, token):
+            return (account, session) if token == "valid-session" else None
+
+    app.state.account_service = Accounts()
+    client = TestClient(app)
+    client.cookies.set("test-session", "valid-session")
+
+    rejected = client.delete(f"/api/v1/documents/{uuid4()}")
+    assert rejected.status_code == 403
+
+    client.cookies.set("test-csrf", "expected-csrf")
+    accepted_csrf = client.delete(f"/api/v1/documents/{uuid4()}",
+        headers={"X-CSRF-Token": "expected-csrf"})
+    assert accepted_csrf.status_code == 503  # CSRF passed; Documents remains unconfigured.

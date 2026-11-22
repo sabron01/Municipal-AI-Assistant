@@ -206,3 +206,125 @@ def test_two_simultaneous_version_uploads_have_one_winner(real_adapters):
     assert len(conflicts) == 1
     assert len(service.versions(document.id, actor_id)) == 2
     assert len(s3.list_objects_v2(Bucket=bucket).get("Contents", [])) == 2
+
+
+def test_fastapi_document_flow_uses_account_permissions_and_csrf(real_adapters, monkeypatch):
+    _service_unused, _storage, engine, actor_id, bucket, s3 = real_adapters
+    from fastapi.testclient import TestClient
+    from sqlalchemy.orm import sessionmaker
+
+    from municipal_assistant.accounts.models import (
+        AccountAuditRow,
+        AccountRow,
+        AccountSessionRow,
+        PermissionGrantRow,
+    )
+    from municipal_assistant.accounts.security import hash_password
+    from municipal_assistant.administration.infrastructure.models import (
+        CatalogAuditRow,
+        CategoryRow,
+        DirectionRow,
+        ServiceRow,
+    )
+    from municipal_assistant.app import configure_documents, create_app
+    from municipal_assistant.documents.infrastructure.composition import build_document_service
+
+    monkeypatch.setenv("DATABASE_URL", os.environ["TEST_DATABASE_URL"])
+    monkeypatch.setenv("AUTH_ENABLED", "true")
+    monkeypatch.setenv("AUTH_COOKIE_SECURE", "false")
+    email = f"docs-it-{uuid4().hex}@example.com"
+    password = "LocalTestPassword-Long!27"
+    password_hash = hash_password(password)
+    app = None
+    direction_id = service_id = category_id = None
+    try:
+        with sessionmaker(engine, expire_on_commit=False)() as session:
+            session.add(AccountRow(id=actor_id, email=email, normalized_email=email,
+                password_hash=password_hash, status="active", is_central_admin=False))
+            session.commit()
+
+        app = create_app()
+        direction = app.state.catalog_service.create_direction(
+            name=f"Test direction {uuid4()}", actor_id=actor_id)
+        service = app.state.catalog_service.create_service(
+            direction_id=direction.id, name=f"Test service {uuid4()}", actor_id=actor_id)
+        category = app.state.catalog_service.create_category(
+            parent_id=None, name=f"Test category {uuid4()}", actor_id=actor_id)
+        direction_id, service_id, category_id = direction.id, service.id, category.id
+
+        with sessionmaker(engine, expire_on_commit=False)() as session:
+            for permission in ("document.create", "document.read", "document.version_add",
+                              "document.soft_delete"):
+                session.add(PermissionGrantRow(account_id=actor_id, service_id=service_id,
+                    permission=permission, granted_by=actor_id))
+            session.commit()
+
+        document_service = build_document_service(
+            database_url=os.environ["TEST_DATABASE_URL"],
+            object_storage_endpoint=os.environ["TEST_RUSTFS_ENDPOINT"],
+            object_storage_access_key=os.environ["TEST_RUSTFS_ACCESS_KEY"],
+            object_storage_secret_key=os.environ["TEST_RUSTFS_SECRET_KEY"],
+            object_storage_bucket=bucket,
+            max_upload_bytes=1024 * 1024,
+            allowed_media_types=frozenset({"application/pdf"}),
+        )
+        configure_documents(app, service=document_service, actor_resolver=app.state.actor_resolver,
+            business_policy_approved=True)
+
+        with TestClient(app) as client:
+            login = client.post("/api/v1/auth/login", json={"email": email, "password": password})
+            assert login.status_code == 200
+            csrf = login.json()["csrf_token"]
+            invalid = client.post("/api/v1/documents", headers={"X-CSRF-Token": csrf},
+                data={"title": "HTTP integration report", "service_id": str(service_id),
+                      "category_id": str(category_id), "unexpected": "reject me"},
+                files={"file": ("report.pdf", b"%PDF-1.7\nfirst HTTP version", "application/pdf")})
+            assert invalid.status_code == 422
+            created = client.post("/api/v1/documents", headers={"X-CSRF-Token": csrf},
+                data={"title": "HTTP integration report", "service_id": str(service_id),
+                      "category_id": str(category_id)},
+                files={"file": ("report.pdf", b"%PDF-1.7\nfirst HTTP version", "application/pdf")})
+            assert created.status_code == 201, created.text
+            document_id = created.json()["id"]
+            first_version_id = created.json()["current_version_id"]
+
+            listed = client.get("/api/v1/documents", params={"service_id": str(service_id)})
+            assert listed.status_code == 200
+            assert [item["id"] for item in listed.json()["items"]] == [document_id]
+
+            version = client.post(f"/api/v1/documents/{document_id}/versions",
+                headers={"X-CSRF-Token": csrf, "If-Match": created.headers["etag"]},
+                files={"file": ("report-v2.pdf", b"%PDF-1.7\nsecond HTTP version", "application/pdf")})
+            assert version.status_code == 201, version.text
+
+            old_content = client.get(f"/api/v1/documents/{document_id}/content",
+                params={"version_id": first_version_id})
+            current_content = client.get(f"/api/v1/documents/{document_id}/content")
+            assert old_content.content == b"%PDF-1.7\nfirst HTTP version"
+            assert current_content.content == b"%PDF-1.7\nsecond HTTP version"
+
+            deleted = client.delete(f"/api/v1/documents/{document_id}",
+                headers={"X-CSRF-Token": csrf, "If-Match": version.headers["etag"]})
+            assert deleted.status_code == 204
+            assert client.get(f"/api/v1/documents/{document_id}").status_code == 404
+            assert len(s3.list_objects_v2(Bucket=bucket).get("Contents", [])) == 2
+    finally:
+        try:
+            with engine.begin() as connection:
+                connection.execute(delete(PermissionGrantRow).where(
+                    (PermissionGrantRow.account_id == actor_id)
+                    | (PermissionGrantRow.granted_by == actor_id)))
+                connection.execute(delete(AccountSessionRow).where(AccountSessionRow.account_id == actor_id))
+                connection.execute(delete(AccountAuditRow).where(
+                    (AccountAuditRow.actor_id == actor_id) | (AccountAuditRow.subject_id == actor_id)))
+                connection.execute(delete(CatalogAuditRow).where(CatalogAuditRow.actor_id == actor_id))
+                if category_id is not None:
+                    connection.execute(delete(CategoryRow).where(CategoryRow.id == category_id))
+                if service_id is not None:
+                    connection.execute(delete(ServiceRow).where(ServiceRow.id == service_id))
+                if direction_id is not None:
+                    connection.execute(delete(DirectionRow).where(DirectionRow.id == direction_id))
+                connection.execute(delete(AccountRow).where(AccountRow.id == actor_id))
+        finally:
+            if app is not None and app.state.account_engine is not None:
+                app.state.account_engine.dispose()

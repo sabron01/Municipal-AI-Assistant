@@ -24,9 +24,10 @@ class FakeAccounts:
 def test_catalog_api_requires_an_authenticated_central_admin():
     app = create_app()
     app.state.account_service = FakeAccounts(is_central_admin=False)
+    client = TestClient(app)
+    client.cookies.set("test_session", "session-token")
 
-    response = TestClient(app).get("/api/v1/admin/catalog/directions",
-        cookies={"test_session": "session-token"})
+    response = client.get("/api/v1/admin/catalog/directions")
 
     assert response.status_code == 403
 
@@ -34,9 +35,10 @@ def test_catalog_api_requires_an_authenticated_central_admin():
 def test_catalog_write_requires_csrf_even_for_a_central_admin():
     app = create_app()
     app.state.account_service = FakeAccounts(is_central_admin=True)
+    client = TestClient(app)
+    client.cookies.set("test_session", "session-token")
 
-    response = TestClient(app).post("/api/v1/admin/catalog/directions",
-        cookies={"test_session": "session-token"}, json={"name": "Finance"})
+    response = client.post("/api/v1/admin/catalog/directions", json={"name": "Finance"})
 
     assert response.status_code == 403
     assert response.json()["status"] == 403
