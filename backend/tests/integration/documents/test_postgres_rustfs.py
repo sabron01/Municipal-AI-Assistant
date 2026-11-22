@@ -237,6 +237,7 @@ def test_fastapi_document_flow_uses_account_permissions_and_csrf(real_adapters, 
     password_hash = hash_password(password)
     app = None
     direction_id = service_id = category_id = None
+    other_service_id = None
     try:
         with sessionmaker(engine, expire_on_commit=False)() as session:
             session.add(AccountRow(id=actor_id, email=email, normalized_email=email,
@@ -248,13 +249,16 @@ def test_fastapi_document_flow_uses_account_permissions_and_csrf(real_adapters, 
             name=f"Test direction {uuid4()}", actor_id=actor_id)
         service = app.state.catalog_service.create_service(
             direction_id=direction.id, name=f"Test service {uuid4()}", actor_id=actor_id)
+        other_service = app.state.catalog_service.create_service(
+            direction_id=direction.id, name=f"Unassigned service {uuid4()}", actor_id=actor_id)
         category = app.state.catalog_service.create_category(
             parent_id=None, name=f"Test category {uuid4()}", actor_id=actor_id)
         direction_id, service_id, category_id = direction.id, service.id, category.id
+        other_service_id = other_service.id
 
         with sessionmaker(engine, expire_on_commit=False)() as session:
             for permission in ("document.create", "document.read", "document.version_add",
-                              "document.soft_delete"):
+                              "document.metadata_update", "document.soft_delete"):
                 session.add(PermissionGrantRow(account_id=actor_id, service_id=service_id,
                     permission=permission, granted_by=actor_id))
             session.commit()
@@ -288,14 +292,32 @@ def test_fastapi_document_flow_uses_account_permissions_and_csrf(real_adapters, 
             document_id = created.json()["id"]
             first_version_id = created.json()["current_version_id"]
 
+            denied_create = client.post("/api/v1/documents", headers={"X-CSRF-Token": csrf},
+                data={"title": "Unassigned report", "service_id": str(other_service_id),
+                      "category_id": str(category_id)},
+                files={"file": ("blocked.pdf", b"%PDF-1.7\nblocked", "application/pdf")})
+            assert denied_create.status_code == 404
+            assert client.get("/api/v1/documents", params={"service_id": str(other_service_id)}).json()["items"] == []
+
+            metadata = client.patch(f"/api/v1/documents/{document_id}",
+                headers={"X-CSRF-Token": csrf, "If-Match": created.headers["etag"]},
+                json={"title": "Renamed integration report", "service_id": str(service_id),
+                      "category_id": str(category_id), "description": None, "reference_number": None})
+            assert metadata.status_code == 200, metadata.text
+            assert metadata.json()["title"] == "Renamed integration report"
+
             listed = client.get("/api/v1/documents", params={"service_id": str(service_id)})
             assert listed.status_code == 200
             assert [item["id"] for item in listed.json()["items"]] == [document_id]
 
             version = client.post(f"/api/v1/documents/{document_id}/versions",
-                headers={"X-CSRF-Token": csrf, "If-Match": created.headers["etag"]},
+                headers={"X-CSRF-Token": csrf, "If-Match": metadata.headers["etag"]},
                 files={"file": ("report-v2.pdf", b"%PDF-1.7\nsecond HTTP version", "application/pdf")})
             assert version.status_code == 201, version.text
+            stale_version = client.post(f"/api/v1/documents/{document_id}/versions",
+                headers={"X-CSRF-Token": csrf, "If-Match": created.headers["etag"]},
+                files={"file": ("stale.pdf", b"%PDF-1.7\nstale", "application/pdf")})
+            assert stale_version.status_code == 412
 
             old_content = client.get(f"/api/v1/documents/{document_id}/content",
                 params={"version_id": first_version_id})
@@ -321,7 +343,8 @@ def test_fastapi_document_flow_uses_account_permissions_and_csrf(real_adapters, 
                 if category_id is not None:
                     connection.execute(delete(CategoryRow).where(CategoryRow.id == category_id))
                 if service_id is not None:
-                    connection.execute(delete(ServiceRow).where(ServiceRow.id == service_id))
+                    connection.execute(delete(ServiceRow).where(
+                        ServiceRow.id.in_([value for value in (service_id, other_service_id) if value is not None])))
                 if direction_id is not None:
                     connection.execute(delete(DirectionRow).where(DirectionRow.id == direction_id))
                 connection.execute(delete(AccountRow).where(AccountRow.id == actor_id))
