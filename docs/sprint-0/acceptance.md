@@ -8,9 +8,17 @@
 - [x] Spécification initiale du module Documents.
 - [x] Protocole de benchmark OCR / embeddings / LLM.
 - [x] Configuration Docker Compose préparée.
-- [ ] Validation syntaxique Docker Compose sur l'environnement cible.
-- [ ] Démarrage et healthchecks PostgreSQL, RustFS et Ollama.
-- [ ] Vérification de la persistance et des sauvegardes.
+- [x] Validation syntaxique Docker Compose sur l'environnement local (2026-11-22).
+- [x] Démarrage et healthchecks PostgreSQL, RustFS; Ollama répond à son endpoint local (2026-11-22).
+- [x] Persistance du volume PostgreSQL (révision Alembic) et du bucket RustFS vérifiée après recréation des conteneurs.
+- [ ] Procédure de sauvegarde/restauration PostgreSQL et RustFS définie et testée.
 - [ ] Validation des formats, limites et règles métier du module Documents.
 
-Les cases non cochées nécessitent une exécution réelle sur l'environnement cible ; elles ne sont pas déclarées réussies.
+## Vérifications ajoutées après Sprint 0
+
+- [x] Migration `20261122_01` appliquée sur PostgreSQL local et révision courante vérifiée.
+- [x] Bucket RustFS privé créé; smoke test S3 `put/head(SHA-256)/get` réussi et objet de test supprimé.
+- [x] Tests unitaires backend : 10 réussis le 2026-11-22.
+- [ ] Intégration automatisée complète sur PostgreSQL/RustFS et revue QA/Security indépendante.
+
+Les règles métier relatives aux formats, tailles, identité, autorisations et conservation ne sont pas validées; les routes Documents restent donc fermées par défaut. Toute case non cochée reste inachevée.

@@ -10,3 +10,4 @@
 - Politique de conservation, classification et traitement des données personnelles à valider.
 - MCP : outils explicitement autorisés, moindre privilège, validation et audit.
 - Les routes Documents restent désactivées/non exposées jusqu'à validation de l'identité, de l'autorisation ressource/service et de l'audit; voir [spécification v1](../documents/specification-v1.md).
+- Une proposition de politique d'accès, non approuvée, est consignée dans [documents-access-policy-proposal.md](documents-access-policy-proposal.md).

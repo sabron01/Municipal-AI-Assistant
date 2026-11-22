@@ -10,7 +10,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-municipal_app}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD in .env}
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./infrastructure/postgres/init:/docker-entrypoint-initdb.d:ro
@@ -22,7 +22,7 @@ services:
     networks: [backend]
 
   rustfs:
-    image: rustfs/rustfs-x86-musl:v2.3.1
+    image: ${RUSTFS_IMAGE:-rustfs/rustfs@sha256:ee717072290bec9b11abfc0365f8310b00df1cd9b3639943edae47bdef05044a}
     container_name: maa-rustfs
     restart: unless-stopped
     environment:
@@ -32,9 +32,10 @@ services:
       RUSTFS_ADDRESS: ":9000"
       RUSTFS_CONSOLE_ADDRESS: ":9001"
       RUSTFS_CONSOLE_ENABLE: "true"
+    command: ["/data"]
     ports:
-      - "${RUSTFS_API_PORT:-${MINIO_API_PORT:-9000}}:9000"
-      - "${RUSTFS_CONSOLE_PORT:-${MINIO_CONSOLE_PORT:-9001}}:9001"
+      - "127.0.0.1:${RUSTFS_API_PORT:-${MINIO_API_PORT:-9000}}:9000"
+      - "127.0.0.1:${RUSTFS_CONSOLE_PORT:-${MINIO_CONSOLE_PORT:-9001}}:9001"
     volumes:
       - rustfs_data:/data
     healthcheck:
@@ -50,7 +51,7 @@ services:
     container_name: maa-ollama
     restart: unless-stopped
     ports:
-      - "${OLLAMA_PORT:-11434}:11434"
+      - "127.0.0.1:${OLLAMA_PORT:-11434}:11434"
     volumes:
       - ollama_data:/root/.ollama
     networks: [backend]
