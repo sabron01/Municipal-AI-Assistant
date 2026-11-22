@@ -1,4 +1,5 @@
 from email.message import EmailMessage
+import ipaddress
 import smtplib
 import ssl
 
@@ -19,7 +20,15 @@ class SmtpEmailSender:
             raise EmailDeliveryUnavailable("Professional email delivery is not configured")
         if settings.smtp_starttls and settings.smtp_use_ssl:
             raise EmailDeliveryUnavailable("Choose SMTP STARTTLS or SMTP SSL, not both")
-        if not settings.smtp_starttls and not settings.smtp_use_ssl:
+        local_host = False
+        try:
+            local_host = ipaddress.ip_address(settings.smtp_host).is_loopback
+        except ValueError:
+            local_host = settings.smtp_host.lower() == "localhost"
+        insecure_local = (settings.smtp_allow_insecure_local and local_host
+                          and not settings.smtp_starttls and not settings.smtp_use_ssl
+                          and not settings.smtp_username and not settings.smtp_password)
+        if not settings.smtp_starttls and not settings.smtp_use_ssl and not insecure_local:
             raise EmailDeliveryUnavailable("SMTP must use STARTTLS or SSL")
         message = EmailMessage()
         message["From"] = settings.smtp_sender

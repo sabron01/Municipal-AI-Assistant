@@ -21,7 +21,7 @@ Monorepo et **monolithe modulaire DDD**, avec PostgreSQL + pgvector, RustFS, Oll
 ## Démarrage de l'infrastructure locale
 1. Créer un `.env` local ignoré par Git et renseigner des identifiants locaux forts.
 2. Lancer `docker compose config -q` pour valider la configuration.
-3. Lancer `docker compose up -d` et vérifier `docker compose ps`.
+3. Lancer `docker compose up -d` et vérifier `docker compose ps`. Mailpit capture les e-mails locaux sur `localhost:1025`; consulter l'interface sur `http://localhost:8025`.
 4. Installer le backend depuis `backend/`, appliquer `alembic upgrade head`, puis démarrer `uvicorn municipal_assistant.app:app`.
 
 L'API locale et les services Compose sont actuellement lancés sur les ports loopback. Le `.env` utilisé dans cet environnement contient des identifiants locaux générés et n'est pas versionné. Cette configuration n'est pas destinée à la production.
