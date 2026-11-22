@@ -10,4 +10,4 @@
 - Politique de conservation, classification et traitement des données personnelles à valider.
 - MCP : outils explicitement autorisés, moindre privilège, validation et audit.
 - Les routes Documents restent désactivées/non exposées jusqu'à validation de l'identité, de l'autorisation ressource/service et de l'audit; voir [spécification v1](../documents/specification-v1.md).
-- Une proposition de politique d'accès, non approuvée, est consignée dans [documents-access-policy-proposal.md](documents-access-policy-proposal.md).
+- Les comptes applicatifs et l'attribution centralisée des permissions sont consignés dans [ADR-012](../architecture/adr/ADR-012-application-managed-accounts.md); les routes restent désactivées jusqu'à mise en place de l'authentification et du cycle de vie complet des comptes dans [la politique d'accès](documents-access-policy-proposal.md).

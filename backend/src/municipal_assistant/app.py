@@ -11,6 +11,10 @@ from .documents.domain.errors import (AccessPolicyUnavailable, ConcurrentModific
     DocumentDeleted, DocumentNotFound, InvalidDocument, InvalidPageCursor, InvalidUpload,
     UnsupportedMediaType, UploadTooLarge)
 from .documents.presentation.router import router as documents_router
+from .accounts.composition import build_account_service
+from .accounts.router import router as accounts_router
+from .accounts.settings import AccountSettings
+from .accounts.service import DatabaseDocumentAccessPolicy
 
 
 class UploadBodyLimitMiddleware:
@@ -86,8 +90,20 @@ class UploadBodyLimitMiddleware:
 
 def create_app() -> FastAPI:
     app = FastAPI(title="Municipal AI Assistant API", version="1.0.0")
+    account_settings = AccountSettings.from_environment()
+    account_service, account_engine = build_account_service(account_settings)
+    app.state.account_service = account_service
+    app.state.account_engine = account_engine
     app.state.document_service = None
-    app.state.actor_resolver = None
+    def resolve_actor(request: Request):
+        service = getattr(request.app.state, "account_service", None)
+        if service is None or not service.settings.auth_enabled:
+            raise AccessPolicyUnavailable("Authentication is not configured")
+        pair = service.current_session(request.cookies.get(service.settings.session_cookie_name))
+        if pair is None:
+            raise AccessPolicyUnavailable("A trusted identity could not be established")
+        return pair[0].id
+    app.state.actor_resolver = resolve_actor
     app.state.max_upload_bytes = None
     app.add_middleware(UploadBodyLimitMiddleware)
 
@@ -135,6 +151,7 @@ def create_app() -> FastAPI:
         return await render_problem(request, 500, "Internal Server Error", "The request could not be completed.")
 
     app.include_router(documents_router, prefix="/api/v1")
+    app.include_router(accounts_router, prefix="/api/v1")
     return app
 
 
@@ -146,6 +163,12 @@ def configure_documents(app: FastAPI, *, service, actor_resolver,
         raise ValueError("A configured upload size and non-empty MIME allowlist are required")
     if actor_resolver is None:
         raise ValueError("A trusted authentication adapter is required")
+    if app.state.account_service is None or not app.state.account_service.settings.auth_enabled:
+        raise ValueError("Application-managed authentication must be enabled first")
+    if actor_resolver is not app.state.actor_resolver:
+        raise ValueError("Documents must use the application-managed session resolver")
+    if not isinstance(getattr(service, "access", None), DatabaseDocumentAccessPolicy):
+        raise ValueError("Documents must use the database-backed service permission policy")
     if iscoroutinefunction(actor_resolver):
         raise ValueError("Provide a synchronous trusted actor resolver for this API adapter")
     if not business_policy_approved:

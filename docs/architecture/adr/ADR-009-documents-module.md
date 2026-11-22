@@ -17,7 +17,7 @@
 - PostgreSQL conserve les métadonnées; RustFS conserve les octets via une abstraction applicative indépendante `ObjectStorage`.
 - RustFS API/console gardent leurs ports de service déterminés dans ADR-008. Le port HTTP de l'application ObjectStorage est un paramètre indépendant, à choisir dans le manifeste de configuration; il ne doit pas être implicitement lié au port RustFS 9000.
 - La cohérence inter-systèmes suit une saga/outbox, objets immuables, versions visibles seulement après vérification du stockage. Pas de transaction distribuée.
-- Authentification et autorisation restent différées et sont une barrière avant exposition des routes.
+- L'authentification applicative et la matrice de permissions sont définies dans [ADR-012](ADR-012-application-managed-accounts.md) et le périmètre de visibilité dans [ADR-011](ADR-011-documents-service-visibility.md). Leur activation opérationnelle reste conditionnée au bootstrap et au SMTP.
 
 ## Détails et conséquences
 
@@ -27,7 +27,7 @@ ADR-008 est la décision active d'implémentation RustFS; ADR-003 MinIO est hist
 
 ## Questions à résoudre avant implémentation fonctionnelle exposée
 
-Catalogue et cycle de vie de classification; source et règles d'historique des Directions/Services; identité, rôles et visibilité; formats et limites upload; champs obligatoires; suppression/purge/rétention; idempotence et comportement des conflits; confidentialité, sauvegardes, antivirus/quarantaine. Aucune règle d'accès ou de conservation n'est déduite ici.
+Catalogue et cycle de vie de classification; source et règles d'historique des Directions/Services; formats et limites upload; champs obligatoires; suppression/purge/rétention; idempotence et comportement des conflits; confidentialité, sauvegardes, antivirus/quarantaine. Les choix de comptes et permissions sont consignés dans ADR-011/012; les points non bloquants y sont reportés après v1.
 
 ## Options considérées
 

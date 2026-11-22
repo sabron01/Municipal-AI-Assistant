@@ -1,8 +1,8 @@
 # Module Documents — spécification technique exécutable v1
 
-- Statut : contrat de référence; implémentation initiale disponible sur la branche `feat/documents-v1`.
+- Statut : contrat de référence; implémentation Documents et tranche initiale comptes/permissions disponibles sur `feat/documents-v1`; activation opérationnelle encore conditionnée à la configuration.
 - Date : 2026-11-22.
-- Portée : contrats et conception, sans code fonctionnel, migration exécutée ni déploiement.
+- Portée : contrat métier/technique; le code des modules Documents et comptes existe, sans présumer qu'une migration a été appliquée ni qu'un déploiement a eu lieu.
 - Décisions métier de référence : `DOC-001` à `DOC-004` dans [ADR-009](../architecture/adr/ADR-009-documents-module.md).
 
 ## 1. Contraintes validées
@@ -12,9 +12,9 @@
 - Toutes les versions sont préservées et immuables ; une seule version est courante par document.
 - La suppression est logique au niveau du document. Elle ne supprime pas les objets ni les versions.
 - PostgreSQL contient les métadonnées ; RustFS contient les octets. La couche applicative dépend du port `ObjectStorage`, jamais du SDK S3.
-- Pas d’authentification, de rôles, de visibilité par service, d’approbation ni de rétention inventés. L’API demeure non exposable avant définition des autorisations.
+- Authentification par comptes applicatifs, visibilité limitée au service et permissions d'action explicites définies dans [ADR-011](../architecture/adr/ADR-011-documents-service-visibility.md) et [ADR-012](../architecture/adr/ADR-012-application-managed-accounts.md). L'accès est refusé par défaut; les routes restent fermées tant que le bootstrap, SMTP et la configuration d'exposition ne sont pas opérationnels.
 
-## 2. Arborescence cible (aucun fichier applicatif créé ici)
+## 2. Arborescence mise en œuvre
 
 ```text
 backend/src/municipal_assistant/documents/
@@ -24,13 +24,15 @@ backend/src/municipal_assistant/documents/
   presentation/{schemas.py,router.py}
 backend/alembic/versions/<revision>_documents_v1.py
 backend/tests/{unit/documents,integration/documents}/
+backend/src/municipal_assistant/accounts/{models.py,service.py,router.py,security.py,email.py}
+backend/alembic/versions/<revision>_application_accounts.py
 ```
 
 Le domaine importe seulement la bibliothèque standard. L’application importe le domaine et ses ports. Infrastructure et présentation implémentent/adaptent ces contrats. Les versions compatibles de Python, FastAPI, Pydantic, SQLAlchemy et Alembic seront celles fixées dans le futur manifeste backend ; le dépôt actuel ne les fixe pas.
 
 ## 3. Domaine : Value Objects et entités
 
-Types recommandés : `DocumentId`, `VersionId`, `ServiceId`, `CategoryId` (UUID), `Sha256` (64 caractères hexadécimaux normalisés), `ObjectKey` (clé opaque relative, jamais un chemin local), `OriginalFilename` (nom d’affichage assaini), `MimeType` (valeur détectée), `ByteSize` (entier strictement positif), `ReferenceNumber` (chaîne optionnelle), `ActorId` (identité technique opaque; son système d’origine reste à choisir), `UtcDateTime` (horodatage timezone-aware UTC). Constructions invalides lèvent `ValueError` ou une erreur de domaine dédiée.
+Types recommandés : `DocumentId`, `VersionId`, `ServiceId`, `CategoryId` (UUID), `Sha256` (64 caractères hexadécimaux normalisés), `ObjectKey` (clé opaque relative, jamais un chemin local), `OriginalFilename` (nom d’affichage assaini), `MimeType` (valeur détectée), `ByteSize` (entier strictement positif), `ReferenceNumber` (chaîne optionnelle), `ActorId` (UUID d'un compte applicatif), `UtcDateTime` (horodatage timezone-aware UTC). Constructions invalides lèvent `ValueError` ou une erreur de domaine dédiée.
 
 ```python
 from dataclasses import dataclass

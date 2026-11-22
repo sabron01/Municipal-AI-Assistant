@@ -3,11 +3,13 @@ import os
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 from municipal_assistant.documents.infrastructure.sqlalchemy_models import Base
+from municipal_assistant.accounts import models as _account_models
+from municipal_assistant.accounts.settings import AccountSettings
 
 config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
-database_url = os.environ.get("DATABASE_URL")
+database_url = AccountSettings.from_environment().database_url or os.environ.get("DATABASE_URL")
 if database_url:
     # ConfigParser uses percent interpolation; database passwords may contain '%'.
     config.set_main_option("sqlalchemy.url", database_url.replace("%", "%%"))
