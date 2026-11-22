@@ -1,53 +1,30 @@
-# Municipal AI Assistant
+# Municipal AI Assistant — Tataouine
 
-Municipal AI Assistant is a public GitHub repository for developing an AI-powered assistant that helps municipal staff, residents, and local government teams access and understand information about public services.
+Socle documentaire du Sprint 0. Le projet est conçu comme un **monorepo** et un **monolithe modulaire DDD**, avec PostgreSQL + pgvector, MinIO, Ollama et des outils MCP internes.
 
-## Overview
+## Statut
+- Sprint 0 autorisé : oui.
+- Développement fonctionnel métier : non démarré.
+- Authentification : décision différée.
+- Modèles LLM / embeddings : benchmark à réaliser avant sélection.
+- Infrastructure : configuration préparatoire fournie ; non exécutée ni validée sur une machine cible.
 
-The repository is currently in the initial setup phase. It provides a starting point for defining and building the assistant's features, integrations, and user experience.
+## Structure
+- `backend/` : emplacement prévu pour l'API FastAPI et les modules métier.
+- `frontend/` : emplacement prévu pour React + TypeScript.
+- `mcp/` : serveurs MCP internes uniquement.
+- `infrastructure/` : configuration et scripts d'infrastructure.
+- `docs/` : architecture, décisions, sécurité, benchmark et spécification documentaire.
+- `.agents/` : profils spécialisés des agents de développement.
 
-Potential use cases include:
+## Démarrage de l'infrastructure locale
+1. Copier `.env.example` vers `.env`.
+2. Modifier impérativement les identifiants MinIO et PostgreSQL.
+3. Lancer `docker compose config` pour valider la syntaxe.
+4. Lancer `docker compose up -d`.
+5. Vérifier les conteneurs avec `docker compose ps`.
 
-- Answering common questions about municipal services
-- Helping residents navigate permits, applications, and local programs
-- Providing guidance on office locations, hours, and contact information
-- Supporting staff with information retrieval and frequently requested procedures
-- Offering clear, accessible responses tailored to local needs
+> Cette configuration est un socle de développement local. Elle ne constitue pas une configuration de production. Aucun service n'a été démarré depuis cet environnement d'assistance.
 
-## Getting Started
-
-At this stage, no setup or runtime instructions have been added because the repository does not yet contain application source files or a language configuration.
-
-```bash
-git clone https://github.com/sabron01/Municipal-AI-Assistant.git
-cd Municipal-AI-Assistant
-```
-
-## Project Status
-
-This is an early-stage project. Planned areas of work include:
-
-- [ ] Define the supported municipal use cases
-- [ ] Choose the application architecture and technology stack
-- [ ] Add source code and configuration
-- [ ] Connect trusted local government information sources
-- [ ] Implement authentication and role-based access if needed
-- [ ] Add testing, deployment, and monitoring
-- [ ] Document local development and production setup
-
-## Contributing
-
-Contributions are welcome. Before submitting a change:
-
-1. Fork the repository.
-2. Create a focused feature or fix branch.
-3. Document the purpose and usage of your changes.
-4. Open a pull request with a clear summary and testing information.
-
-## License
-
-No license has been selected yet. Please do not assume that use or redistribution is permitted until a license is added.
-
-## Repository
-
-- [Municipal-AI-Assistant on GitHub](https://github.com/sabron01/Municipal-AI-Assistant)
+## Gouvernance
+Lire `AGENTS.md` avant toute contribution. Toute modification de décision architecturale passe par un ADR et, si elle change le périmètre approuvé, par validation du responsable produit.
