@@ -9,7 +9,7 @@
 - [x] Protocole de benchmark OCR / embeddings / LLM.
 - [x] Configuration Docker Compose préparée.
 - [ ] Validation syntaxique Docker Compose sur l'environnement cible.
-- [ ] Démarrage et healthchecks PostgreSQL, MinIO et Ollama.
+- [ ] Démarrage et healthchecks PostgreSQL, RustFS et Ollama.
 - [ ] Vérification de la persistance et des sauvegardes.
 - [ ] Validation des formats, limites et règles métier du module Documents.
 

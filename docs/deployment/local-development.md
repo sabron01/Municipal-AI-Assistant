@@ -14,7 +14,7 @@ docker compose ps
 
 ## Services
 - PostgreSQL 16 avec pgvector : port 5432 par défaut.
-- MinIO API : port 9000 ; console : port 9001.
+- RustFS API : port hôte `RUSTFS_API_PORT` (9000 par défaut) ; console : `RUSTFS_CONSOLE_PORT` (9001 par défaut). L'application configure séparément `OBJECT_STORAGE_ENDPOINT` (par exemple `http://rustfs:9000` depuis le réseau Compose); ce n'est pas un port d'écoute RustFS.
 - Ollama : port 11434.
 
 Ne pas utiliser les identifiants d'exemple en environnement partagé ou en production. Les ports doivent être restreints au réseau de confiance. La configuration doit être revue avant toute exposition réseau.

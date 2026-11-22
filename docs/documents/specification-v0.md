@@ -1,5 +1,7 @@
 # Module Documents — Spécification initiale v0
 
+> Historique : cette version est remplacée pour la conception par [la spécification technique v1](specification-v1.md) et [ADR-009](../architecture/adr/ADR-009-documents-module.md). Les règles métier confirmées sont détaillées dans ces documents; les questions encore ouvertes restent bloquantes avant exposition fonctionnelle.
+
 ## Objectif
 Définir le premier module du produit sans présumer des règles administratives non communiquées.
 
