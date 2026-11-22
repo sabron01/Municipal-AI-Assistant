@@ -4,10 +4,10 @@ Monorepo et **monolithe modulaire DDD**, avec PostgreSQL + pgvector, RustFS, Oll
 
 ## Statut
 - Socle local : démarré et vérifié le 2026-11-22 (PostgreSQL, RustFS, Ollama, API FastAPI).
-- Module Documents v1 : backend et contrôle d'accès par service implémentés sur `feat/documents-v1`; le registre Direction/Service/Catégorie est disponible, mais ses données officielles restent à charger.
+- Module Documents v1 : backend, contrôle d'accès par service et registre Direction/Service/Catégorie implémentés sur `feat/documents-v1`; l’interface React d’administration du registre est en cours.
 - Authentification : comptes applicatifs et permissions par action implémentés; l'administrateur initial local est activé, avec Mailpit pour les courriels de développement.
 - Modèles LLM / embeddings : benchmark à réaliser avant sélection.
-- Interface React : emplacement réservé, aucun écran fonctionnel.
+- Interface React : écran d’administration du registre en cours d’implémentation; l’interface Documents et le dépôt de fichiers ne sont pas encore couverts.
 - Sauvegardes : non configurées ni testées.
 
 ## Structure
