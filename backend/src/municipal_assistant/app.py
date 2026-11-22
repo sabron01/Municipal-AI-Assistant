@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from .documents.domain.errors import (AccessPolicyUnavailable, ConcurrentModification, DependencyUnavailable,
+    DocumentError,
     DocumentDeleted, DocumentNotFound, InvalidDocument, InvalidPageCursor, InvalidUpload,
     UnsupportedMediaType, UploadTooLarge)
 from .documents.presentation.router import router as documents_router
@@ -18,16 +19,16 @@ class UploadBodyLimitMiddleware:
         self.app, self.memory_spool_bytes = app, memory_spool_bytes
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send):
-        if scope["type"] != "http" or scope["method"] not in {"POST", "PUT", "PATCH"}:
+        if (scope["type"] != "http" or scope["method"] not in {"POST", "PUT", "PATCH"}
+                or not scope.get("path", "").startswith("/api/v1/documents")):
             return await self.app(scope, receive, send)
         headers = {key.lower(): value for key, value in scope.get("headers", [])}
-        if not headers.get(b"content-type", b"").lower().startswith(b"multipart/form-data"):
-            return await self.app(scope, receive, send)
+        is_multipart = headers.get(b"content-type", b"").lower().startswith(b"multipart/form-data")
         state = scope.get("app").state if scope.get("app") else None
         max_upload_bytes = getattr(state, "max_upload_bytes", None)
         request_id = str(uuid4())
         resolver = getattr(state, "actor_resolver", None)
-        if not max_upload_bytes or resolver is None:
+        if is_multipart and not max_upload_bytes:
             response = JSONResponse(status_code=503, media_type="application/problem+json", content={
                 "type": "about:blank", "title": "Upload disabled", "status": 503,
                 "detail": "Upload size and file type policies are not configured.", "request_id": request_id})
@@ -45,7 +46,7 @@ class UploadBodyLimitMiddleware:
                 "type": "about:blank", "title": "Access policy unavailable", "status": 503,
                 "detail": "A trusted identity could not be established.", "request_id": request_id})
             return await response(scope, receive, send)
-        max_body = max_upload_bytes + 64 * 1024
+        max_body = max_upload_bytes + 64 * 1024 if is_multipart else 16 * 1024
         try:
             declared = int(headers.get(b"content-length", b"0"))
         except ValueError:
@@ -101,16 +102,16 @@ def create_app() -> FastAPI:
     def health():
         return {"status": "ok"}
 
-    @app.exception_handler(Exception)
-    async def problem_handler(request: Request, exc: Exception):
+    async def render_problem(request: Request, status_code: int, title: str, detail: str):
+        return JSONResponse(status_code=status_code, media_type="application/problem+json", content={
+            "type": "about:blank", "title": title, "status": status_code, "detail": detail,
+            "instance": str(request.url.path), "request_id": getattr(request.state, "request_id", None),
+        })
+
+    @app.exception_handler(DocumentError)
+    async def domain_problem_handler(request: Request, exc: DocumentError):
         status_code, title, detail = 500, "Internal Server Error", "The request could not be completed."
-        if isinstance(exc, HTTPException):
-            status_code = exc.status_code
-            title = "Request Error"
-            detail = str(exc.detail)
-        elif isinstance(exc, RequestValidationError):
-            status_code, title, detail = 422, "Validation Error", "Request fields are invalid."
-        elif isinstance(exc, AccessPolicyUnavailable): status_code, title, detail = 503, "Access policy unavailable", str(exc)
+        if isinstance(exc, AccessPolicyUnavailable): status_code, title, detail = 503, "Access policy unavailable", str(exc)
         elif isinstance(exc, DependencyUnavailable): status_code, title, detail = 503, "Dependency unavailable", str(exc)
         elif isinstance(exc, DocumentNotFound | DocumentDeleted): status_code, title, detail = 404, "Not Found", "Document was not found."
         elif isinstance(exc, ConcurrentModification): status_code, title, detail = 412, "Precondition Failed", str(exc)
@@ -119,10 +120,19 @@ def create_app() -> FastAPI:
         elif isinstance(exc, UnsupportedMediaType): status_code, title, detail = 415, "Unsupported Media Type", str(exc)
         elif isinstance(exc, InvalidUpload): status_code, title, detail = 400, "Invalid Upload", str(exc)
         elif isinstance(exc, InvalidDocument): status_code, title, detail = 422, "Invalid Document", str(exc)
-        return JSONResponse(status_code=status_code, media_type="application/problem+json", content={
-            "type": "about:blank", "title": title, "status": status_code, "detail": detail,
-            "instance": str(request.url.path), "request_id": getattr(request.state, "request_id", None),
-        })
+        return await render_problem(request, status_code, title, detail)
+
+    @app.exception_handler(HTTPException)
+    async def http_problem_handler(request: Request, exc: HTTPException):
+        return await render_problem(request, exc.status_code, "Request Error", str(exc.detail))
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_problem_handler(request: Request, exc: RequestValidationError):
+        return await render_problem(request, 422, "Validation Error", "Request fields are invalid.")
+
+    @app.exception_handler(Exception)
+    async def problem_handler(request: Request, exc: Exception):
+        return await render_problem(request, 500, "Internal Server Error", "The request could not be completed.")
 
     app.include_router(documents_router, prefix="/api/v1")
     return app

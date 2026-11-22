@@ -7,7 +7,10 @@ from municipal_assistant.documents.infrastructure.sqlalchemy_models import Base
 config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
-config.set_main_option("sqlalchemy.url", os.environ.get("DATABASE_URL", config.get_main_option("sqlalchemy.url")))
+database_url = os.environ.get("DATABASE_URL")
+if database_url:
+    # ConfigParser uses percent interpolation; database passwords may contain '%'.
+    config.set_main_option("sqlalchemy.url", database_url.replace("%", "%%"))
 target_metadata = Base.metadata
 
 def run_migrations_offline():
