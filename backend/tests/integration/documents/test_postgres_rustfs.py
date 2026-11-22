@@ -4,18 +4,28 @@ Requires a dedicated migrated PostgreSQL database and a RustFS test endpoint.
 The fixture creates a random bucket and removes only rows written by its actor.
 """
 import os
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
 from uuid import uuid4
 from io import BytesIO
 
 import boto3
 import pytest
+from datetime import datetime, timezone
 from botocore.config import Config
 from sqlalchemy import create_engine, delete, select
 from sqlalchemy.orm import sessionmaker
 
 from municipal_assistant.documents.application.use_cases import CreateDocument, DocumentService
-from municipal_assistant.documents.domain.errors import DocumentNotFound
-from municipal_assistant.documents.domain.value_objects import CategoryId, ServiceId
+from municipal_assistant.documents.domain.entities import DocumentVersion, VersionState
+from municipal_assistant.documents.domain.errors import ConcurrentModification, DocumentNotFound
+from municipal_assistant.documents.domain.value_objects import (
+    CategoryId,
+    ObjectKey,
+    ServiceId,
+    Sha256,
+    VersionId,
+)
 from municipal_assistant.documents.infrastructure.postgres_repositories import PostgresUnitOfWork
 from municipal_assistant.documents.infrastructure.rustfs_storage import RustFSObjectStorage
 from municipal_assistant.documents.infrastructure.sqlalchemy_models import (
@@ -148,3 +158,51 @@ def test_document_versions_round_trip_through_postgres_and_rustfs(real_adapters)
         service.get(document.id, actor_id)
     # Logical deletion does not remove either immutable RustFS object.
     assert all(storage.head(key) is not None for key in keys)
+
+
+def test_pending_version_reservation_blocks_a_second_upload(real_adapters):
+    service, _storage, _engine, actor_id, bucket, s3 = real_adapters
+    document = service.create(CreateDocument("Concurrent report", ServiceId(uuid4()),
+        CategoryId(uuid4()), "report.pdf", BytesIO(b"%PDF-1.7\ninitial")), actor_id)
+    pending_id = VersionId(uuid4())
+    pending = DocumentVersion(pending_id, document.id, 2,
+        ObjectKey(f"documents/{document.id.value}/{pending_id.value}"),
+        Sha256("a" * 64), 20, "application/pdf", "pending.pdf",
+        datetime.now(timezone.utc), actor_id, state=VersionState.PENDING)
+    with service.uow_factory() as uow:
+        uow.documents.reserve_version(pending, expected_aggregate_version=document.aggregate_version)
+        uow.commit()
+
+    with pytest.raises(ConcurrentModification):
+        service.add_version(document.id, BytesIO(b"%PDF-1.7\ncompeting"),
+            "competing.pdf", actor_id, expected_version=document.aggregate_version)
+
+    objects = s3.list_objects_v2(Bucket=bucket).get("Contents", [])
+    assert len(objects) == 1
+
+
+def test_two_simultaneous_version_uploads_have_one_winner(real_adapters):
+    service, _storage, _engine, actor_id, bucket, s3 = real_adapters
+    document = service.create(CreateDocument("Concurrent report", ServiceId(uuid4()),
+        CategoryId(uuid4()), "report.pdf", BytesIO(b"%PDF-1.7\ninitial")), actor_id)
+    barrier = Barrier(2)
+
+    def upload(filename, payload):
+        barrier.wait(timeout=10)
+        return service.add_version(document.id, BytesIO(payload), filename, actor_id,
+            expected_version=document.aggregate_version)
+
+    winners, conflicts = [], []
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        futures = [pool.submit(upload, "concurrent-a.pdf", b"%PDF-1.7\nversion a"),
+                   pool.submit(upload, "concurrent-b.pdf", b"%PDF-1.7\nversion b")]
+        for future in futures:
+            try:
+                winners.append(future.result(timeout=30))
+            except ConcurrentModification as exc:
+                conflicts.append(exc)
+
+    assert len(winners) == 1
+    assert len(conflicts) == 1
+    assert len(service.versions(document.id, actor_id)) == 2
+    assert len(s3.list_objects_v2(Bucket=bucket).get("Contents", [])) == 2

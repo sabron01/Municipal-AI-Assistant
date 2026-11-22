@@ -50,6 +50,8 @@ class DocumentVersionRow(Base):
         CheckConstraint("size_bytes > 0", name="ck_document_version_size"),
         CheckConstraint("state IN ('pending','available','failed')", name="ck_document_version_state"),
         Index("ix_document_versions_document_sequence", "document_id", text("sequence DESC")),
+        Index("uq_document_versions_one_pending_per_document", "document_id", unique=True,
+              postgresql_where=text("state = 'pending'")),
         {"schema": "documents"},
     )
     id: Mapped[object] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid4)
