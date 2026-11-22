@@ -7,6 +7,7 @@ from fastapi import APIRouter, File, Form, Header, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from starlette.background import BackgroundTask
 
+from ...accounts.security import digest_secret, secure_equal
 from ..application.use_cases import CreateDocument
 from ..domain.entities import Document
 from ..domain.errors import AccessPolicyUnavailable, ConcurrentModification
@@ -31,6 +32,19 @@ def _actor(request: Request) -> UUID:
     if not isinstance(actor, UUID):
         raise AccessPolicyUnavailable("Configured identity resolver returned no trusted actor")
     return actor
+
+
+def _require_csrf(request: Request, csrf_header: str | None) -> None:
+    accounts = getattr(request.app.state, "account_service", None)
+    if accounts is None or not accounts.settings.auth_enabled:
+        raise AccessPolicyUnavailable("Application-managed authentication is not configured")
+    pair = accounts.current_session(request.cookies.get(accounts.settings.session_cookie_name))
+    if pair is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
+    csrf_cookie = request.cookies.get(accounts.settings.csrf_cookie_name)
+    if (not csrf_cookie or not csrf_header or not secure_equal(csrf_cookie, csrf_header)
+            or not secure_equal(digest_secret(csrf_cookie), pair[1].csrf_hash)):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="CSRF validation failed")
 
 
 def _service(request: Request):
@@ -78,8 +92,21 @@ def _stream_chunks(readable) -> Iterator[bytes]:
 
 
 @router.post("", response_model=DocumentOut, status_code=status.HTTP_201_CREATED)
-def create_document(request: Request, payload: Annotated[DocumentCreate, Form()],
-                    file: Annotated[UploadFile, File()], response: Response):
+async def create_document(request: Request,
+                    title: Annotated[str, Form(min_length=1, max_length=300)],
+                    service_id: Annotated[UUID, Form()],
+                    category_id: Annotated[UUID, Form()],
+                    file: Annotated[UploadFile, File()], response: Response,
+                    description: Annotated[str | None, Form(max_length=5000)] = None,
+                    reference_number: Annotated[str | None, Form(max_length=200)] = None,
+                    csrf_header: Annotated[str | None, Header(alias="X-CSRF-Token")] = None):
+    _require_csrf(request, csrf_header)
+    form = await request.form()
+    allowed_fields = {"title", "service_id", "category_id", "description", "reference_number", "file"}
+    if set(form.keys()) - allowed_fields:
+        raise HTTPException(status_code=422, detail="Unexpected multipart form field")
+    payload = DocumentCreate(title=title, service_id=service_id, category_id=category_id,
+        description=description, reference_number=reference_number)
     document = _service(request).create(CreateDocument(payload.title, ServiceId(payload.service_id),
         CategoryId(payload.category_id), file.filename or "upload", file.file, payload.description,
         payload.reference_number), _actor(request))
@@ -105,7 +132,9 @@ def get_document(request: Request, document_id: UUID, response: Response):
 
 @router.patch("/{document_id}", response_model=DocumentOut)
 def update_document(request: Request, document_id: UUID, payload: DocumentPatch,
-                    response: Response, if_match: Annotated[str | None, Header()] = None):
+                    response: Response, if_match: Annotated[str | None, Header()] = None,
+                    csrf_header: Annotated[str | None, Header(alias="X-CSRF-Token")] = None):
+    _require_csrf(request, csrf_header)
     document = _service(request).update(DocumentId(document_id), _actor(request), title=payload.title,
         description=payload.description, reference_number=payload.reference_number,
         service_id=ServiceId(payload.service_id), category_id=CategoryId(payload.category_id),
@@ -116,7 +145,9 @@ def update_document(request: Request, document_id: UUID, payload: DocumentPatch,
 
 @router.post("/{document_id}/versions", response_model=DocumentOut, status_code=status.HTTP_201_CREATED)
 def add_version(request: Request, document_id: UUID, file: Annotated[UploadFile, File()],
-                response: Response, if_match: Annotated[str | None, Header()] = None):
+                response: Response, if_match: Annotated[str | None, Header()] = None,
+                csrf_header: Annotated[str | None, Header(alias="X-CSRF-Token")] = None):
+    _require_csrf(request, csrf_header)
     document = _service(request).add_version(DocumentId(document_id), file.file, file.filename or "upload",
         _actor(request), _expected_version(if_match))
     response.headers["ETag"] = _etag(document)
@@ -141,5 +172,7 @@ def download_document(request: Request, document_id: UUID, version_id: UUID | No
 
 
 @router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_document(request: Request, document_id: UUID, if_match: Annotated[str | None, Header()] = None):
+def delete_document(request: Request, document_id: UUID, if_match: Annotated[str | None, Header()] = None,
+                    csrf_header: Annotated[str | None, Header(alias="X-CSRF-Token")] = None):
+    _require_csrf(request, csrf_header)
     _service(request).soft_delete(DocumentId(document_id), _actor(request), _expected_version(if_match))

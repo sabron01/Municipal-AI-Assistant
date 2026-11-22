@@ -46,6 +46,20 @@ services:
       start_period: 10s
     networks: [backend]
 
+  mailpit:
+    image: axllent/mailpit:v1.34.0
+    container_name: maa-mailpit
+    restart: unless-stopped
+    environment:
+      MP_MAX_MESSAGES: 5000
+      MP_DATABASE: /data/mailpit.db
+    ports:
+      - "127.0.0.1:${MAILPIT_SMTP_PORT:-1025}:1025"
+      - "127.0.0.1:${MAILPIT_UI_PORT:-8025}:8025"
+    volumes:
+      - mailpit_data:/data
+    networks: [backend]
+
   ollama:
     image: ollama/ollama:latest
     container_name: maa-ollama
@@ -59,6 +73,7 @@ services:
 volumes:
   postgres_data:
   rustfs_data:
+  mailpit_data:
   ollama_data:
 
 networks:

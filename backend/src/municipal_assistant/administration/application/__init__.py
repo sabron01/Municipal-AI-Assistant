@@ -1,0 +1,1 @@
+"""Administration catalog use cases."""

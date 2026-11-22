@@ -17,4 +17,4 @@ Le modèle métier du module Documents est détaillé dans [sa spécification te
 3. Suppression logique du document; aucune suppression implicite d'objet.
 4. Le changement de service/catégorie/titre ne modifie pas le fichier ni son historique.
 
-Les droits d'accès, la rétention, les référentiels, les formats acceptés et les champs métier restent à valider; voir les questions ouvertes dans la spécification.
+Le registre Administration implémente les Directions, Services et Catégories; les données initiales et les politiques de cycle de vie restent à valider. Les formats acceptés et les champs métier restent également ouverts dans la spécification.

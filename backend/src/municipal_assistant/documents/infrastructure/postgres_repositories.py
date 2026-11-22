@@ -87,6 +87,16 @@ class PostgresDocumentRepository:
         return tuple(_version_to_domain(row) for row in rows)
 
     def reserve_version(self, version: DocumentVersion, *, expected_aggregate_version: int | None = None) -> None:
+        if expected_aggregate_version is not None:
+            aggregate_version = self.session.scalar(select(DocumentRow.aggregate_version).where(
+                DocumentRow.id == version.document_id.value).with_for_update())
+            if aggregate_version != expected_aggregate_version:
+                raise ConcurrentModification("Document changed before the upload could be reserved")
+            pending_id = self.session.scalar(select(DocumentVersionRow.id).where(
+                DocumentVersionRow.document_id == version.document_id.value,
+                DocumentVersionRow.state == VersionState.PENDING.value).limit(1))
+            if pending_id is not None:
+                raise ConcurrentModification("Another document upload is still pending")
         self.session.add(DocumentVersionRow(id=version.id.value, document_id=version.document_id.value,
             sequence=version.sequence, object_key=version.object_key.value, sha256=version.sha256.value,
             size_bytes=version.size_bytes, detected_mime_type=version.detected_mime_type,

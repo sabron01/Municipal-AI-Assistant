@@ -27,6 +27,7 @@ class AccountSettings:
     smtp_sender: str | None
     smtp_starttls: bool
     smtp_use_ssl: bool
+    smtp_allow_insecure_local: bool
     session_ttl_hours: int
     cookie_secure: bool
     auth_enabled: bool
@@ -56,6 +57,7 @@ class AccountSettings:
             smtp_sender=os.getenv("SMTP_SENDER") or None,
             smtp_starttls=_boolean("SMTP_STARTTLS", True),
             smtp_use_ssl=_boolean("SMTP_USE_SSL", False),
+            smtp_allow_insecure_local=_boolean("SMTP_ALLOW_INSECURE_LOCAL", False),
             session_ttl_hours=int(os.getenv("AUTH_SESSION_TTL_HOURS", "8")),
             cookie_secure=_boolean("AUTH_COOKIE_SECURE", True),
             auth_enabled=_boolean("AUTH_ENABLED", False),

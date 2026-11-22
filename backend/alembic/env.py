@@ -4,6 +4,7 @@ from alembic import context
 from sqlalchemy import engine_from_config, pool
 from municipal_assistant.documents.infrastructure.sqlalchemy_models import Base
 from municipal_assistant.accounts import models as _account_models
+from municipal_assistant.administration.infrastructure import models as _administration_models
 from municipal_assistant.accounts.settings import AccountSettings
 
 config = context.config

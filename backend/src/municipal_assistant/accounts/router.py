@@ -237,6 +237,11 @@ def revoke_admin(account_id: UUID, request: Request,
 def set_permissions(account_id: UUID, service_id: UUID, payload: PermissionsIn, request: Request,
                     csrf_header: Annotated[str | None, Header(alias="X-CSRF-Token")] = None):
     admin = _require_admin(request, csrf_header)
+    catalog = getattr(request.app.state, "catalog_service", None)
+    if catalog is None:
+        raise HTTPException(503, "Administration catalogs are not configured")
+    if not catalog.service_exists(service_id):
+        raise HTTPException(404, "Service was not found")
     if len(payload.permissions) != len(set(payload.permissions)) or not set(payload.permissions).issubset(PERMISSIONS):
         raise HTTPException(422, "Unsupported or duplicate permission")
     try:

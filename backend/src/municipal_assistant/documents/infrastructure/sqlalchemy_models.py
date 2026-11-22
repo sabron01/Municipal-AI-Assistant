@@ -1,6 +1,6 @@
 from datetime import datetime
 from sqlalchemy import (BigInteger, Boolean, CheckConstraint, DateTime, ForeignKey, ForeignKeyConstraint,
-                        Integer, String, Text, UniqueConstraint, func)
+                        Index, Integer, String, Text, UniqueConstraint, func, text)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from uuid import uuid4
@@ -17,6 +17,9 @@ class DocumentRow(Base):
         ForeignKeyConstraint(["id", "current_version_id"], ["documents.document_versions.document_id",
             "documents.document_versions.id"], name="fk_documents_current_version", deferrable=True,
             initially="DEFERRED", use_alter=True),
+        Index("ix_documents_service_created", "service_id", text("created_at DESC"), text("id DESC")),
+        Index("ix_documents_category_created", "category_id", text("created_at DESC"), text("id DESC")),
+        Index("ix_documents_active", "created_at", "id", postgresql_where=text("status = 'active'")),
         {"schema": "documents"},
     )
     id: Mapped[object] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid4)
@@ -46,6 +49,9 @@ class DocumentVersionRow(Base):
         CheckConstraint("sequence > 0", name="ck_document_version_sequence"),
         CheckConstraint("size_bytes > 0", name="ck_document_version_size"),
         CheckConstraint("state IN ('pending','available','failed')", name="ck_document_version_state"),
+        Index("ix_document_versions_document_sequence", "document_id", text("sequence DESC")),
+        Index("uq_document_versions_one_pending_per_document", "document_id", unique=True,
+              postgresql_where=text("state = 'pending'")),
         {"schema": "documents"},
     )
     id: Mapped[object] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid4)
@@ -78,7 +84,8 @@ class OutboxRow(Base):
 
 class DocumentAuditRow(Base):
     __tablename__ = "document_audit"
-    __table_args__ = {"schema": "documents"}
+    __table_args__ = (Index("ix_document_audit_doc_created", "document_id", "created_at"),
+                      {"schema": "documents"})
     id: Mapped[object] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid4)
     document_id: Mapped[object | None] = mapped_column(UUID(as_uuid=True), ForeignKey(
         "documents.documents.id", ondelete="RESTRICT"))
