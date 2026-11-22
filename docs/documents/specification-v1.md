@@ -1,8 +1,8 @@
 # Module Documents — spécification technique exécutable v1
 
-- Statut : contrat de référence; implémentation Documents, comptes/permissions et registre Administration disponibles sur `feat/documents-v1`; données initiales et configuration d’exposition restent à fournir.
+- Statut : contrat de référence et implémentation backend Documents, comptes/permissions et registre Administration disponibles sur `feat/documents-v1`; migrations vérifiées sur environnement local isolé, aucun déploiement effectué. Les données initiales et la configuration d’exposition restent à fournir.
 - Date : 2026-11-22.
-- Portée : contrat métier/technique; le code des modules Documents et comptes existe, sans présumer qu'une migration a été appliquée ni qu'un déploiement a eu lieu.
+- Portée : contrat métier/technique et suivi des validations locales; les migrations ont été appliquées à une base locale et à une base temporaire de test, sans déploiement partagé.
 - Décisions métier de référence : `DOC-001` à `DOC-004` dans [ADR-009](../architecture/adr/ADR-009-documents-module.md).
 
 ## 1. Contraintes validées
@@ -30,11 +30,11 @@ backend/src/municipal_assistant/administration/{domain,application,infrastructur
 backend/alembic/versions/<revision>_administration_catalogs.py
 ```
 
-Le domaine importe seulement la bibliothèque standard. L’application importe le domaine et ses ports. Infrastructure et présentation implémentent/adaptent ces contrats. Les versions compatibles de Python, FastAPI, Pydantic, SQLAlchemy et Alembic seront celles fixées dans le futur manifeste backend ; le dépôt actuel ne les fixe pas.
+Le domaine importe seulement la bibliothèque standard. L’application importe le domaine et ses ports. Infrastructure et présentation implémentent/adaptent ces contrats. Les dépendances et leurs bornes de compatibilité sont déclarées dans `backend/pyproject.toml`.
 
 ## 3. Domaine : Value Objects et entités
 
-Types recommandés : `DocumentId`, `VersionId`, `ServiceId`, `CategoryId` (UUID), `Sha256` (64 caractères hexadécimaux normalisés), `ObjectKey` (clé opaque relative, jamais un chemin local), `OriginalFilename` (nom d’affichage assaini), `MimeType` (valeur détectée), `ByteSize` (entier strictement positif), `ReferenceNumber` (chaîne optionnelle), `ActorId` (UUID d'un compte applicatif), `UtcDateTime` (horodatage timezone-aware UTC). Constructions invalides lèvent `ValueError` ou une erreur de domaine dédiée.
+Types implémentés : `DocumentId`, `VersionId`, `ServiceId`, `CategoryId` (UUID), `Sha256` (64 caractères hexadécimaux normalisés), `ObjectKey` (clé opaque relative, jamais un chemin local), nom de fichier assaini, MIME détecté, taille strictement positive, référence optionnelle, acteur applicatif et horodatages timezone-aware. Constructions invalides lèvent `ValueError` ou une erreur de domaine dédiée.
 
 ```python
 from dataclasses import dataclass
@@ -78,7 +78,7 @@ class Document:
                         category_id: CategoryId, expected_version: int) -> None: ...
 ```
 
-Les ellipses ci-dessus désignent les obligations de comportement, pas une implémentation. Invariants : séquence positive et unique par document, version courante appartenant au document, horodatages UTC, agrégat supprimé non téléchargeable et non modifiable, version jamais écrasée, suppression répétée idempotente ou réponse 404 selon la politique HTTP à confirmer. Toute modification des octets crée une nouvelle version ; les changements de titre/service/catégorie/description/référence ne créent pas de version de fichier. Service et catégorie sont des références vers des registres détenus par le contexte Administration (absent ici) : leur existence doit être validée par ports de lecture, sans FK inter-contextes si leurs tables ne sont pas dans le même propriétaire de schéma.
+Les ellipses ci-dessus désignent les obligations de comportement, pas une implémentation dans cet extrait. Invariants : séquence positive et unique par document, version courante appartenant au document, horodatages UTC, agrégat supprimé non téléchargeable et non modifiable, version jamais écrasée, suppression répétée idempotente. Toute modification des octets crée une nouvelle version ; les changements de titre/service/catégorie/description/référence ne créent pas de version de fichier. Service et catégorie sont validés par des ports vers les registres détenus par le contexte Administration; aucune FK inter-contextes n'est ajoutée.
 
 ## 4. Ports Python (Protocol)
 
@@ -200,17 +200,17 @@ Les transactions distribuées sont impossibles. Sémantique retenue : PostgreSQL
 
 **Unitaires** : invariants entités/VO, transitions version/suppression, permissions refusées par défaut, validation de taille/type/checksum, idempotence, conflit optimiste, mapping d’erreurs.
 
-**Intégration PostgreSQL** : contraintes uniques/FK/check, migration up/down sur PostgreSQL réel, concurrence de deux versions, curseur stable, tombstone invisible et historique préservé. **Contrat ObjectStorage** : même suite pour adaptateur faux/local et RustFS de test : put/head/open/checksum, objet absent, erreur/transitoire, flux, nettoyage d’objet non référencé. **API** : schémas, multipart limites, routes protégées, 404 anti-énumération, `If-Match`, streaming, Problem Details. **Sécurité** : path traversal, MIME spoofing, taille dépassée, nom actif, mauvais service, injection de filtres, credentials absents, logs sans données sensibles. Les tests unitaires de domaine, validation d'upload, fermeture par défaut et plafonnement des requêtes sont ajoutés et exécutés : 10 réussis le 2026-11-22. Génération Alembic hors ligne, import des modèles SQLAlchemy, génération OpenAPI et compilation syntaxique ont également réussi; migration réelle et intégrations PostgreSQL/RustFS restent à faire.
+**Intégration PostgreSQL** : contraintes uniques/FK/check, migration up/down sur PostgreSQL réel, concurrence de deux versions, curseur stable, tombstone invisible et historique préservé. **Contrat ObjectStorage** : même suite pour adaptateur faux/local et RustFS de test : put/head/open/checksum, objet absent, erreur/transitoire, flux, nettoyage d’objet non référencé. **API** : schémas, multipart limites, routes protégées, 404 anti-énumération, `If-Match`, streaming, Problem Details. **Sécurité** : path traversal, MIME spoofing, taille dépassée, nom actif, mauvais service, injection de filtres, credentials absents, logs sans données sensibles. Les tests unitaires couvrent domaine, validation d'upload, accès fail-closed, plafonnement des requêtes, registre Administration et cas d'utilisation dépôt/version. Dernière suite complète : 24 réussis, 1 test d'intégration réel ignoré faute de variables de test; avertissements de dépréciation Starlette/httpx présents. Séparément, `tests/integration/documents/test_postgres_rustfs.py` a réussi sur une base PostgreSQL temporaire migrée et RustFS local : dépôt, vérification de checksum, ajout de version, téléchargement historique/courant et suppression logique. Un aller-retour `alembic downgrade base` puis `upgrade head` et `alembic check` a également réussi sur cette base temporaire, ensuite supprimée; la base locale reste à `20261122_04`. La concurrence de deux versions et l'intégration API complète ne sont pas encore couvertes par ce test réel.
 
 ## 12. Hypothèses et décisions métier ouvertes (bloquantes avant code exposé)
 
 1. Liste officielle des Directions, Services et Catégories à charger dans le registre Administration.
 2. Cycle de vie des entrées du registre : archivage/désactivation, déplacement et effet historique d’un renommage (différé après v1).
-3. Rôles, identité de l’acteur, visibilité service/commune, délégations, accès aux téléchargements, administration et audits.
-4. Formats exacts, taille maximale, scan/quarantaine, documents protégés/chiffrés, règle MIME.
-5. Champs obligatoires, unicité/format de référence, convention de titre et langues.
-6. Suppression réversible ou définitive, rétention légale, purge objet, conservation sauvegardes/audit.
-7. Politique idempotence upload, limites pagination, ordre de tri, réponse DELETE répétée, ETag/version concurrency.
-8. Exigences de confidentialité/données personnelles, localisation, chiffrement et sauvegarde/restauration.
+3. Formats exacts, taille maximale, scan/quarantaine, documents protégés/chiffrés, règle MIME. Les routes restent fermées tant que la liste MIME et la limite d’upload ne sont pas configurées.
+4. Champs métier supplémentaires, unicité/format des références, convention de titre et langues.
+5. Suppression réversible ou définitive, rétention légale, purge physique et durée de conservation des sauvegardes/audits.
+6. Exigences de confidentialité/données personnelles, localisation, chiffrement et procédures de sauvegarde/restauration.
+
+Les comptes applicatifs, la visibilité par service, les permissions explicites par action, l'administrateur central et la politique d'accès fail-closed sont définis dans ADR-011/012 et implémentés. Délégations et accès temporaires sont différés après v1.
 
 Les valeurs techniques proposées (300 caractères titre, 5 000 description, 200 référence) sont des bornes de schéma initiales à confirmer, et non des règles métier validées. Les endpoints sont présents mais échouent fermés par défaut; leur configuration exige des adaptateurs d'identité et de registre validés, une liste MIME et une limite d'upload explicites, puis un gate QA/Security.
