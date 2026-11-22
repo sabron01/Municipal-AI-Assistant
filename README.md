@@ -1,6 +1,6 @@
 # Municipal AI Assistant — Tataouine
 
-Socle documentaire du Sprint 0. Le projet est conçu comme un **monorepo** et un **monolithe modulaire DDD**, avec PostgreSQL + pgvector, MinIO, Ollama et des outils MCP internes.
+Socle documentaire du Sprint 0. Le projet est conçu comme un **monorepo** et un **monolithe modulaire DDD**, avec PostgreSQL + pgvector, RustFS, Ollama et des outils MCP internes.
 
 ## Statut
 - Sprint 0 autorisé : oui.
@@ -19,7 +19,7 @@ Socle documentaire du Sprint 0. Le projet est conçu comme un **monorepo** et un
 
 ## Démarrage de l'infrastructure locale
 1. Copier `.env.example` vers `.env`.
-2. Modifier impérativement les identifiants MinIO et PostgreSQL.
+2. Modifier impérativement les identifiants RustFS et PostgreSQL.
 3. Lancer `docker compose config` pour valider la syntaxe.
 4. Lancer `docker compose up -d`.
 5. Vérifier les conteneurs avec `docker compose ps`.
