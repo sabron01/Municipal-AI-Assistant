@@ -30,7 +30,7 @@ class DocumentService:
         self.service_directory, self.category_directory, self.access = service_directory, category_directory, access
 
     def create(self, command: CreateDocument, actor_id: UUID) -> Document:
-        self._authorize(actor_id, "document.create", None, write=True)
+        self._authorize(actor_id, "document.create", None, write=True, service_id=command.service_id)
         self._validate_references(command.service_id, command.category_id)
         staged = self.validator.stage(command.body, filename=command.filename)
         document_id, version_id = DocumentId(uuid4()), VersionId(uuid4())
@@ -124,11 +124,16 @@ class DocumentService:
     def list(self, query: DocumentQuery, actor_id: UUID):
         with self.uow_factory() as uow:
             page = uow.documents.list(query)
+            visible = []
             for item in page.items:
-                self._authorize(actor_id, "document.list", item, write=False)
+                try:
+                    self._authorize(actor_id, "document.list", item, write=False)
+                except DocumentNotFound:
+                    continue
+                visible.append(item)
                 uow.audit.record(actor_id=actor_id, action="document.listed", document_id=item.id)
             uow.commit()
-            return page
+            return replace(page, items=visible)
 
     def versions(self, document_id: DocumentId, actor_id: UUID):
         document = self.get(document_id, actor_id)
@@ -160,10 +165,13 @@ class DocumentService:
     def update(self, document_id: DocumentId, actor_id: UUID, *, title: str, description: str | None,
                reference_number: str | None, service_id: ServiceId, category_id: CategoryId,
                expected_version: int) -> Document:
-        self._validate_references(service_id, category_id)
         with self.uow_factory() as uow:
             document = self._get(uow, document_id)
             self._authorize(actor_id, "document.metadata_update", document, write=True)
+            if service_id != document.service_id:
+                self._authorize(actor_id, "document.metadata_update", None, write=True,
+                                service_id=service_id)
+            self._validate_references(service_id, category_id)
             document.update_metadata(title=title, description=description, reference_number=reference_number,
                                      service_id=service_id, category_id=category_id,
                                      expected_version=expected_version)
@@ -222,12 +230,19 @@ class DocumentService:
         if not self.service_directory.exists(service_id) or not self.category_directory.exists(category_id):
             raise InvalidDocument("Unknown service or category")
 
-    def _authorize(self, actor_id: UUID, action: str, document: Document | None, *, write: bool) -> None:
+    def _authorize(self, actor_id: UUID, action: str, document: Document | None, *, write: bool,
+                   service_id: ServiceId | None = None) -> None:
         try:
-            if write:
-                self.access.require_write(actor_id, document)
-            else:
+            scoped_service = document.service_id if document is not None else service_id
+            if scoped_service is None:
+                raise AccessPolicyUnavailable("A service scope is required for authorization")
+            require = getattr(self.access, "require", None)
+            if require is not None:
+                require(actor_id, action, scoped_service)
+            elif action in {"document.read", "document.list"} and document is not None:
                 self.access.require_read(actor_id, document)
+            else:
+                self.access.require_write(actor_id, document)
         except Exception:
             with self.uow_factory() as audit_uow:
                 audit_uow.audit.record(actor_id=actor_id, action=action,
