@@ -9,8 +9,8 @@
 - Ollama comme runtime local envisagé ; modèles à sélectionner après benchmark.
 - MCP limité à des outils internes.
 
-## Modules candidats
-Documents, Identité & Accès, Connaissances/RAG, Assistant IA, Administration. Cette liste est une hypothèse d'organisation technique, pas une validation des processus métier.
+## Modules
+Documents, Identité & Accès, Administration (référentiels Direction/Service/Catégorie), Connaissances/RAG, Assistant IA. Les modules fonctionnels n’impliquent pas à eux seuls une validation des processus métier.
 
 ## Principes
 - Commencer par le module Documents.

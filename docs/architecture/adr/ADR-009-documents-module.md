@@ -21,13 +21,13 @@
 
 ## Détails et conséquences
 
-La spécification exécutable est [specification-v1.md](../../documents/specification-v1.md). Elle définit ports Protocol, cas d'utilisation, schémas, routes, tables, cohérence, sécurité et matrice de tests, sans créer de code applicatif.
+La spécification exécutable est [specification-v1.md](../../documents/specification-v1.md). Elle définit ports Protocol, cas d'utilisation, schémas, routes, tables, cohérence, sécurité et matrice de tests. Le registre Administration retenu ensuite est décrit dans [ADR-013](ADR-013-administration-catalogs.md).
 
 ADR-008 est la décision active d'implémentation RustFS; ADR-003 MinIO est historique et remplacé. Cette décision ne valide ni migration de données MinIO, ni déploiement de production, ni politique de rétention physique.
 
 ## Questions à résoudre avant implémentation fonctionnelle exposée
 
-Catalogue et cycle de vie de classification; source et règles d'historique des Directions/Services; formats et limites upload; champs obligatoires; suppression/purge/rétention; idempotence et comportement des conflits; confidentialité, sauvegardes, antivirus/quarantaine. Les choix de comptes et permissions sont consignés dans ADR-011/012; les points non bloquants y sont reportés après v1.
+Cycle de vie et données initiales du catalogue; formats et limites upload; champs obligatoires; suppression/purge/rétention; idempotence et comportement des conflits; confidentialité, sauvegardes, antivirus/quarantaine. Les choix de comptes et permissions sont consignés dans ADR-011/012; les points non bloquants y sont reportés après v1.
 
 ## Options considérées
 

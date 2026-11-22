@@ -1,6 +1,6 @@
 # Module Documents — spécification technique exécutable v1
 
-- Statut : contrat de référence; implémentation Documents et tranche initiale comptes/permissions disponibles sur `feat/documents-v1`; activation opérationnelle encore conditionnée à la configuration.
+- Statut : contrat de référence; implémentation Documents, comptes/permissions et registre Administration disponibles sur `feat/documents-v1`; données initiales et configuration d’exposition restent à fournir.
 - Date : 2026-11-22.
 - Portée : contrat métier/technique; le code des modules Documents et comptes existe, sans présumer qu'une migration a été appliquée ni qu'un déploiement a eu lieu.
 - Décisions métier de référence : `DOC-001` à `DOC-004` dans [ADR-009](../architecture/adr/ADR-009-documents-module.md).
@@ -26,6 +26,8 @@ backend/alembic/versions/<revision>_documents_v1.py
 backend/tests/{unit/documents,integration/documents}/
 backend/src/municipal_assistant/accounts/{models.py,service.py,router.py,security.py,email.py}
 backend/alembic/versions/<revision>_application_accounts.py
+backend/src/municipal_assistant/administration/{domain,application,infrastructure,presentation}/
+backend/alembic/versions/<revision>_administration_catalogs.py
 ```
 
 Le domaine importe seulement la bibliothèque standard. L’application importe le domaine et ses ports. Infrastructure et présentation implémentent/adaptent ces contrats. Les versions compatibles de Python, FastAPI, Pydantic, SQLAlchemy et Alembic seront celles fixées dans le futur manifeste backend ; le dépôt actuel ne les fixe pas.
@@ -202,8 +204,8 @@ Les transactions distribuées sont impossibles. Sémantique retenue : PostgreSQL
 
 ## 12. Hypothèses et décisions métier ouvertes (bloquantes avant code exposé)
 
-1. Catalogue des catégories/sous-catégories, règles de modification et archivage des entrées.
-2. Source et cycle de vie des Directions/Services; les identifiants peuvent-ils être inactifs/renommés et comment gérer leur historique ?
+1. Liste officielle des Directions, Services et Catégories à charger dans le registre Administration.
+2. Cycle de vie des entrées du registre : archivage/désactivation, déplacement et effet historique d’un renommage (différé après v1).
 3. Rôles, identité de l’acteur, visibilité service/commune, délégations, accès aux téléchargements, administration et audits.
 4. Formats exacts, taille maximale, scan/quarantaine, documents protégés/chiffrés, règle MIME.
 5. Champs obligatoires, unicité/format de référence, convention de titre et langues.

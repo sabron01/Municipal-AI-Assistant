@@ -15,6 +15,8 @@ from .accounts.composition import build_account_service
 from .accounts.router import router as accounts_router
 from .accounts.settings import AccountSettings
 from .accounts.service import DatabaseDocumentAccessPolicy
+from .administration.composition import build_catalog_service
+from .administration.presentation.router import router as administration_router
 
 
 class UploadBodyLimitMiddleware:
@@ -94,6 +96,7 @@ def create_app() -> FastAPI:
     account_service, account_engine = build_account_service(account_settings)
     app.state.account_service = account_service
     app.state.account_engine = account_engine
+    app.state.catalog_service = build_catalog_service(account_engine) if account_engine else None
     app.state.document_service = None
     def resolve_actor(request: Request):
         service = getattr(request.app.state, "account_service", None)
@@ -152,6 +155,7 @@ def create_app() -> FastAPI:
 
     app.include_router(documents_router, prefix="/api/v1")
     app.include_router(accounts_router, prefix="/api/v1")
+    app.include_router(administration_router, prefix="/api/v1")
     return app
 
 
