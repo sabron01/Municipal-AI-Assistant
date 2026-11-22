@@ -1,6 +1,6 @@
 # Module Documents — spécification technique exécutable v1
 
-- Statut : spécification prête pour implémentation, non implémentée.
+- Statut : contrat de référence; implémentation initiale disponible sur la branche `feat/documents-v1`.
 - Date : 2026-11-22.
 - Portée : contrats et conception, sans code fonctionnel, migration exécutée ni déploiement.
 - Décisions métier de référence : `DOC-001` à `DOC-004` dans [ADR-009](../architecture/adr/ADR-009-documents-module.md).
@@ -171,7 +171,7 @@ Erreurs : `400` entrée invalide, `404` ressource absente ou non visible (ne pas
 
 ## 8. PostgreSQL / SQLAlchemy / Alembic
 
-Tables dédiées `documents.documents` et `documents.document_versions`; UUID PK, `timestamptz`, `text/varchar` bornés, `bigint` taille, checksum `char(64)`, clé objet unique. Index : `(service_id, created_at DESC, id)`, `(category_id, created_at DESC, id)`, `(document_id, sequence DESC)`, index partiel documents actifs. Contraintes : `size_bytes > 0`, `sequence > 0`, status enum/check, `UNIQUE(document_id, sequence)`, `UNIQUE(object_key)`, FKs versions→documents, FK composite document `(id,current_version_id)` vers versions `(document_id,id)` (contrainte différée ou mise à jour dans transaction). Le rattachement service/catégorie utilise UUID; FKs aux tables de référentiel seulement après décision de propriété/schéma.
+Tables dédiées `documents.documents`, `documents.document_versions`, `documents.document_outbox` et `documents.document_audit`; UUID PK, `timestamptz`, `text/varchar` bornés, `bigint` taille, checksum `char(64)`, clé objet unique. Les statuts techniques sont `pending|available|failed` pour version, `pending|active|deleted` pour document; seul `active` est visible. L'outbox garde l'état de reprise et la version d'agrégat attendue. L'audit conserve actor, action, document/version et résultat, sans contenu fichier. Index : `(service_id, created_at DESC, id)`, `(category_id, created_at DESC, id)`, `(document_id, sequence DESC)`, index partiel documents actifs. Contraintes : `size_bytes > 0`, `sequence > 0`, status enum/check, `UNIQUE(document_id, sequence)`, `UNIQUE(object_key)`, FKs versions→documents, FK composite document `(id,current_version_id)` vers versions `(document_id,id)` (contrainte différée ou mise à jour dans transaction). Le rattachement service/catégorie utilise UUID; FKs aux tables de référentiel seulement après décision de propriété/schéma.
 
 `DocumentRow` et `DocumentVersionRow` SQLAlchemy 2.x ne traversent pas vers le domaine. Mapping explicite. Alembic : une migration réversible crée schema/tables/indexes/checks; pas de données initiales de catégories/services ni d’extension non justifiée. Index de recherche texte/RAG hors périmètre. `aggregate_version` est compteur optimiste (`UPDATE ... WHERE aggregate_version=:expected`), le conflit renvoie 412.
 
@@ -192,11 +192,11 @@ Les transactions distribuées sont impossibles. Sémantique retenue : PostgreSQL
 - Aucun document, extrait, token, clé, ou URL pré-signée dans logs. Audit structuré actor opaque, action, document/version, date UTC, request ID et résultat; durée d’audit à fixer.
 - Menaces à traiter : usurpation ID, fuite inter-service, malware, zip bomb, MIME trompeur, concurrence version, objets orphelins, SSRF via endpoint S3 configurable, rejeu upload.
 
-## 11. Plan de tests à écrire avec l’implémentation
+## 11. Plan de tests
 
 **Unitaires** : invariants entités/VO, transitions version/suppression, permissions refusées par défaut, validation de taille/type/checksum, idempotence, conflit optimiste, mapping d’erreurs.
 
-**Intégration PostgreSQL** : contraintes uniques/FK/check, migration up/down sur PostgreSQL réel, concurrence de deux versions, curseur stable, tombstone invisible et historique préservé. **Contrat ObjectStorage** : même suite pour adaptateur faux/local et RustFS de test : put/head/open/checksum, objet absent, erreur/transitoire, flux, nettoyage d’objet non référencé. **API** : schémas, multipart limites, routes protégées, 404 anti-énumération, `If-Match`, streaming, Problem Details. **Sécurité** : path traversal, MIME spoofing, taille dépassée, nom actif, mauvais service, injection de filtres, credentials absents, logs sans données sensibles. Aucun test n’est prétendu exécuté par cette spécification.
+**Intégration PostgreSQL** : contraintes uniques/FK/check, migration up/down sur PostgreSQL réel, concurrence de deux versions, curseur stable, tombstone invisible et historique préservé. **Contrat ObjectStorage** : même suite pour adaptateur faux/local et RustFS de test : put/head/open/checksum, objet absent, erreur/transitoire, flux, nettoyage d’objet non référencé. **API** : schémas, multipart limites, routes protégées, 404 anti-énumération, `If-Match`, streaming, Problem Details. **Sécurité** : path traversal, MIME spoofing, taille dépassée, nom actif, mauvais service, injection de filtres, credentials absents, logs sans données sensibles. Des tests unitaires de domaine, validation d'upload et fermeture par défaut de l'API sont ajoutés; l'exécution de la suite et les intégrations PostgreSQL/RustFS restent à faire.
 
 ## 12. Hypothèses et décisions métier ouvertes (bloquantes avant code exposé)
 
@@ -209,4 +209,4 @@ Les transactions distribuées sont impossibles. Sémantique retenue : PostgreSQL
 7. Politique idempotence upload, limites pagination, ordre de tri, réponse DELETE répétée, ETag/version concurrency.
 8. Exigences de confidentialité/données personnelles, localisation, chiffrement et sauvegarde/restauration.
 
-Les valeurs techniques proposées (300 caractères titre, 5 000 description, 200 référence) sont des bornes de schéma initiales à confirmer, et non des règles métier validées. Les endpoints proposés restent spécifiés, mais leur exposition attend la résolution des points 2–6 et un gate QA/Security.
+Les valeurs techniques proposées (300 caractères titre, 5 000 description, 200 référence) sont des bornes de schéma initiales à confirmer, et non des règles métier validées. Les endpoints sont présents mais échouent fermés par défaut; leur configuration exige des adaptateurs d'identité et de registre validés, une liste MIME et une limite d'upload explicites, puis un gate QA/Security.
