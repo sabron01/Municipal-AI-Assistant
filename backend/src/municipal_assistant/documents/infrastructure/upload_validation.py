@@ -62,15 +62,19 @@ class UploadValidator:
 
     def stage(self, body, *, filename: str) -> StagedFile:
         safe_name = OriginalFilename(filename).value
-        staged = SpooledTemporaryFile(max_size=1024 * 1024, mode="w+b")
+        staged = body if getattr(body, "seekable", lambda: False)() else SpooledTemporaryFile(
+            max_size=1024 * 1024, mode="w+b")
+        owns_staged = staged is not body
         checksum, size = digest(), 0
         try:
+            staged.seek(0)
             while chunk := body.read(1024 * 1024):
                 size += len(chunk)
                 if size > self.max_bytes:
                     raise UploadTooLarge("Upload exceeds configured size limit")
                 checksum.update(chunk)
-                staged.write(chunk)
+                if owns_staged:
+                    staged.write(chunk)
             if size == 0:
                 raise InvalidUpload("Empty files are not accepted")
             staged.seek(0)
@@ -80,5 +84,6 @@ class UploadValidator:
             # Extension is display-only; detected signature is authoritative.
             return StagedFile(staged, safe_name, media_type, size, checksum.hexdigest())
         except Exception:
-            staged.close()
+            if owns_staged:
+                staged.close()
             raise
