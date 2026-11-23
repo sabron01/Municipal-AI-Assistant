@@ -22,5 +22,6 @@
 - [x] Intégration automatisée PostgreSQL/RustFS exécutée le 2026-11-23 sur une base dédiée migrée : 81 réussis, 0 ignoré; workflow CI backend correspondant défini dans `.github/workflows/ci.yml`.
 - [x] Tests frontend du registre : 23 réussis le 2026-11-23 (Vitest + Testing Library), build et lint conformes.
 - [ ] Revue QA/Security indépendante et première exécution de la CI sur GitHub.
+- [x] Corrections issues de la revue QA/Security du Sprint 1 (contrastes WCAG AA, déconnexion mobile, `Cache-Control: no-store`, garde d'accès unique, message d'indisponibilité au démarrage) : 82 tests backend (4 ignorés) et 26 tests frontend réussis le 2026-11-23.
 
 Les règles métier relatives aux formats, tailles, identité, autorisations et conservation ne sont pas validées; les routes Documents restent donc fermées par défaut. Toute case non cochée reste inachevée.

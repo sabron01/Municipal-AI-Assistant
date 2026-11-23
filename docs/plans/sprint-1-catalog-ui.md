@@ -1,6 +1,6 @@
 # Proposition de Sprint 1 — Interface du registre Administration
 
-- Statut : périmètre recommandé retenu pour la poursuite du projet; implémentation réalisée, couverte par des tests frontend sur l'accès, le chargement filtré par l'API, les catégories racines/sous-catégories et les erreurs de session/conflit; revue QA/Security et tests des parcours de renommage, d'états vides et d'accessibilité à compléter.
+- Statut : périmètre recommandé retenu pour la poursuite du projet; implémentation réalisée, couverte par des tests frontend sur l'accès, le chargement filtré par l'API, les catégories racines/sous-catégories et les erreurs de session/conflit; les corrections de la revue QA/Security (contrastes, déconnexion mobile, cache, garde d'accès unique, message d'indisponibilité) sont appliquées; revue indépendante finale à réaliser.
 - Dépendances : contrat de l’API `/admin/catalog` existant; source de vérité confirmée dans ADR-013.
 - Hors périmètre : aucun changement backend, aucune saisie d’une liste officielle prédéfinie, aucune interface de dépôt de documents.
 

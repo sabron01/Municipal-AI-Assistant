@@ -3,31 +3,13 @@ from uuid import UUID
 
 from fastapi import APIRouter, Header, HTTPException, Request, status
 
-from ...accounts.security import digest_secret, secure_equal
+from ...accounts.guards import require_central_admin as _admin
 from ..application.use_cases import CatalogUseCases
 from ..domain.errors import CatalogConflict, CatalogEntryNotFound, InvalidCatalogEntry
 from .schemas import (CategoryCreateIn, CategoryOut, DirectionOut, NameIn,
                       ServiceCreateIn, ServiceOut)
 
 router = APIRouter(prefix="/admin/catalog", tags=["administration-catalog"])
-
-
-def _admin(request: Request, csrf_header: str | None = None):
-    accounts = getattr(request.app.state, "account_service", None)
-    if accounts is None or not accounts.settings.auth_enabled:
-        raise HTTPException(503, "Account services are not configured")
-    pair = accounts.current_session(request.cookies.get(accounts.settings.session_cookie_name))
-    if pair is None:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Authentication required")
-    if request.method not in {"GET", "HEAD", "OPTIONS"}:
-        settings = accounts.settings
-        csrf_cookie = request.cookies.get(settings.csrf_cookie_name)
-        if (not csrf_cookie or not csrf_header or not secure_equal(csrf_cookie, csrf_header)
-                or not secure_equal(digest_secret(csrf_cookie), pair[1].csrf_hash)):
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "CSRF validation failed")
-    if not pair[0].is_central_admin:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Central administrator permission required")
-    return pair[0]
 
 
 def _catalog(request: Request) -> CatalogUseCases:

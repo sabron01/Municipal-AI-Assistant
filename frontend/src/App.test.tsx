@@ -83,8 +83,7 @@ describe('accès au registre', () => {
     expect(mocked.listDirections).not.toHaveBeenCalled()
   })
 
-  it('ouvre le registre après une connexion administrateur', async () => {
-    const user = userEvent.setup()
+  it('ouvre le registre après une connexion administrateur', async () => {    const user = userEvent.setup()
     authenticatedCatalog()
     mocked.getCurrentAccount.mockRejectedValue(new api.ApiError(401, 'Non authentifié'))
     mocked.login.mockResolvedValue(admin)
@@ -96,6 +95,34 @@ describe('accès au registre', () => {
 
     expect(await screen.findByText('Services techniques')).toBeTruthy()
     expect(mocked.login).toHaveBeenCalledWith('admin@example.tn', 'mot-de-passe-solide')
+  })
+
+  it('explique une indisponibilité du service au démarrage', async () => {
+    mocked.getCurrentAccount.mockRejectedValue(new api.ApiError(503, 'Service indisponible'))
+    render(<App />)
+
+    expect(await screen.findByText('Le service est momentanément indisponible. Réessayez plus tard.')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Se connecter' })).toBeTruthy()
+  })
+
+  it('n’affiche aucune alerte lorsqu’aucune session n’est ouverte', async () => {
+    mocked.getCurrentAccount.mockRejectedValue(new api.ApiError(401, 'Non authentifié'))
+    render(<App />)
+
+    await screen.findByRole('heading', { name: 'Espace d’administration' })
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('permet de se déconnecter depuis le registre', async () => {
+    authenticatedCatalog()
+    const user = userEvent.setup()
+    render(<App />)
+
+    await screen.findByText('Services techniques')
+    await user.click(screen.getByRole('button', { name: 'Se déconnecter' }))
+
+    await waitFor(() => expect(mocked.logout).toHaveBeenCalled())
+    expect(await screen.findByRole('heading', { name: 'Espace d’administration' })).toBeTruthy()
   })
 })
 

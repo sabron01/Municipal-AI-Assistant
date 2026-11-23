@@ -115,6 +115,8 @@ def create_app() -> FastAPI:
         request.state.request_id = str(uuid4())
         response = await call_next(request)
         response.headers["X-Request-ID"] = request.state.request_id
+        if request.url.path.startswith("/api/v1"):
+            response.headers.setdefault("Cache-Control", "no-store")
         return response
 
     @app.get("/health", include_in_schema=False)

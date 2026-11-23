@@ -38,7 +38,7 @@ function apiMessage(error: unknown) {
   return 'La requête n’a pas abouti. Vérifiez la connexion puis réessayez.'
 }
 
-function LoginScreen({ onLogin }: { onLogin: (email: string, password: string) => Promise<void> }) {
+function LoginScreen({ onLogin, serviceError }: { onLogin: (email: string, password: string) => Promise<void>; serviceError?: string }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
@@ -66,6 +66,7 @@ function LoginScreen({ onLogin }: { onLogin: (email: string, password: string) =
         <p className="eyebrow">Municipalité de Tataouine</p>
         <h1 id="login-title">Espace d’administration</h1>
         <p className="muted login-copy">Connectez-vous avec votre compte professionnel pour gérer les référentiels.</p>
+        {serviceError && <p className="feedback error login-alert" role="alert">{serviceError}</p>}
         <form className="form-stack" onSubmit={submit}>
           <label className="field">
             <span>Adresse professionnelle</span>
@@ -382,6 +383,7 @@ export default function App() {
   const [account, setAccount] = useState<Account | null>(null)
   const [checkingSession, setCheckingSession] = useState(true)
   const [accessDenied, setAccessDenied] = useState(false)
+  const [startupError, setStartupError] = useState('')
 
   useEffect(() => {
     let mounted = true
@@ -390,15 +392,16 @@ export default function App() {
       setAccount(current)
       setAccessDenied(!current.is_central_admin)
     }).catch((cause: unknown) => {
-      if (mounted && !(cause instanceof ApiError && cause.status === 401)) {
-        setAccessDenied(true)
-      }
+      if (!mounted) return
+      if (cause instanceof ApiError && cause.status === 401) return
+      setStartupError(apiMessage(cause))
     }).finally(() => { if (mounted) setCheckingSession(false) })
     return () => { mounted = false }
   }, [])
 
   async function authenticate(email: string, password: string) {
     const current = await login(email, password)
+    setStartupError('')
     setAccount(current)
     setAccessDenied(!current.is_central_admin)
   }
@@ -414,6 +417,6 @@ export default function App() {
 
   if (checkingSession) return <main className="boot-screen"><div className="brand-mark" aria-hidden="true">T</div><span className="spinner" /><p>Vérification de la session…</p></main>
   if (accessDenied && account) return <AccessDenied onLogout={() => void signOut()} />
-  if (!account) return <LoginScreen onLogin={authenticate} />
+  if (!account) return <LoginScreen onLogin={authenticate} serviceError={startupError} />
   return <CatalogWorkspace account={account} onLogout={signOut} />
 }
