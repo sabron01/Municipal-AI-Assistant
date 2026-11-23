@@ -5,6 +5,7 @@
 - TLS sur les accès réseau de production.
 - Authentification et autorisations obligatoires avant exposition fonctionnelle.
 - Validation du contenu des fichiers, limites de taille et protection contre les fichiers malveillants. Aucun analyse antivirus en v1 (ADR-014) : risque accepté pour l'usage interne, à réévaluer avant toute exposition élargie.
+- Confidentialité : quatre niveaux (public, interne, confidentiel, secret) informatifs (ADR-018); données hébergées sur serveurs locaux à Tataouine; chiffrement au repos et TLS obligatoires.
 - Journalisation sans contenu documentaire ni secret.
 - Sauvegarde/restauration testée de PostgreSQL et RustFS.
 - Politique de conservation, classification et traitement des données personnelles à valider.
