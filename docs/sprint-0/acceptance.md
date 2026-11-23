@@ -12,7 +12,7 @@
 - [x] Démarrage et healthchecks PostgreSQL, RustFS; Ollama répond à son endpoint local (2026-11-22).
 - [x] Persistance du volume PostgreSQL (révision Alembic) et du bucket RustFS vérifiée après recréation des conteneurs.
 - [x] Procédure de sauvegarde/restauration PostgreSQL et RustFS définie et testée le 2026-11-23 (voir `docs/deployment/backup-restore.md`).
-- [ ] Validation des formats, limites et règles métier du module Documents.
+- [x] Validation des formats et limites d'upload du module Documents (ADR-014); décisions D2 à D5 encore ouvertes.
 
 ## Vérifications ajoutées après Sprint 0
 
@@ -24,4 +24,4 @@
 - [ ] Revue QA/Security indépendante et première exécution de la CI sur GitHub.
 - [x] Corrections issues de la revue QA/Security du Sprint 1 (contrastes WCAG AA, déconnexion mobile, `Cache-Control: no-store`, garde d'accès unique, message d'indisponibilité au démarrage) : 82 tests backend (4 ignorés) et 26 tests frontend réussis le 2026-11-23.
 
-Les règles métier relatives aux formats, tailles, identité, autorisations et conservation ne sont pas validées; les routes Documents restent donc fermées par défaut. Toute case non cochée reste inachevée.
+Les formats, la taille maximale et le refus des PDF chiffrés sont validés dans l'ADR-014; le cycle de vie du registre, les champs métier, la rétention et la confidentialité restent non validés. Les routes Documents restent fermées par défaut tant que la configuration n'est pas complète et approuvée. Toute case non cochée reste inachevée.

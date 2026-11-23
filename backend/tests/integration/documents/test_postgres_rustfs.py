@@ -232,6 +232,9 @@ def test_fastapi_document_flow_uses_account_permissions_and_csrf(real_adapters, 
     monkeypatch.setenv("DATABASE_URL", os.environ["TEST_DATABASE_URL"])
     monkeypatch.setenv("AUTH_ENABLED", "true")
     monkeypatch.setenv("AUTH_COOKIE_SECURE", "false")
+    for name in ("DOCUMENT_MAX_UPLOAD_BYTES", "DOCUMENT_ALLOWED_MEDIA_TYPES",
+                 "DOCUMENT_POLICY_APPROVED"):
+        monkeypatch.delenv(name, raising=False)
     email = f"docs-it-{uuid4().hex}@example.com"
     password = "LocalTestPassword-Long!27"
     password_hash = hash_password(password)

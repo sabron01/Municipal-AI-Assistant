@@ -4,7 +4,7 @@
 - PostgreSQL et RustFS non exposés publiquement.
 - TLS sur les accès réseau de production.
 - Authentification et autorisations obligatoires avant exposition fonctionnelle.
-- Validation du contenu des fichiers, limites de taille et protection contre les fichiers malveillants.
+- Validation du contenu des fichiers, limites de taille et protection contre les fichiers malveillants. Aucun analyse antivirus en v1 (ADR-014) : risque accepté pour l'usage interne, à réévaluer avant toute exposition élargie.
 - Journalisation sans contenu documentaire ni secret.
 - Sauvegarde/restauration testée de PostgreSQL et RustFS.
 - Politique de conservation, classification et traitement des données personnelles à valider.

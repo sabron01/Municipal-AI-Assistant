@@ -1,3 +1,4 @@
+import re
 from hashlib import sha256 as digest
 from pathlib import PurePath
 from tempfile import SpooledTemporaryFile
@@ -7,11 +8,32 @@ from ..domain.errors import InvalidUpload, UnsupportedMediaType, UploadTooLarge
 from ..domain.ports import StagedUpload
 from ..domain.value_objects import OriginalFilename, Sha256
 
+PDF_TRAILER_SCAN_BYTES = 1024 * 1024
+ENCRYPTION_MARKER = re.compile(rb"/Encrypt(?=[\s<\[(])")
+
+
+def pdf_is_encrypted(body) -> bool:
+    """Détecte un PDF chiffré via le marqueur /Encrypt du dictionnaire trailer.
+
+    Heuristique bornée aux derniers 1 Mio : un PDF chiffré, même protégé par un
+    simple mot de passe propriétaire, porte /Encrypt dans son trailer.
+    """
+    try:
+        body.seek(0, 2)
+        size = body.tell()
+        body.seek(max(0, size - PDF_TRAILER_SCAN_BYTES))
+        return ENCRYPTION_MARKER.search(body.read(PDF_TRAILER_SCAN_BYTES)) is not None
+    finally:
+        body.seek(0)
+
 
 def detect_media_type(body, *, max_uncompressed_bytes: int) -> str:
     head = body.read(16)
     body.seek(0)
-    if head.startswith(b"%PDF-"): return "application/pdf"
+    if head.startswith(b"%PDF-"):
+        if pdf_is_encrypted(body):
+            raise UnsupportedMediaType("Encrypted PDF files are not accepted")
+        return "application/pdf"
     if head.startswith(b"\x89PNG\r\n\x1a\n"): return "image/png"
     if head.startswith(b"\xff\xd8\xff"): return "image/jpeg"
     if head.startswith((b"GIF87a", b"GIF89a")): return "image/gif"

@@ -23,6 +23,15 @@ def test_upload_is_rejected_when_format_is_not_configured():
             BytesIO(b"%PDF-1.7\nexample"), filename="report.pdf")
 
 
+def test_encrypted_pdf_is_rejected():
+    encrypted = (b"%PDF-1.7\n1 0 obj\n<< /Type /Catalog >>\nendobj\n"
+                 b"trailer\n<< /Size 2 /Encrypt 2 0 R >>\nstartxref\n0\n%%EOF")
+
+    with pytest.raises(UnsupportedMediaType, match="Encrypted PDF"):
+        UploadValidator(max_bytes=1024, allowed_media_types=frozenset({"application/pdf"})).stage(
+            BytesIO(encrypted), filename="protected.pdf")
+
+
 def test_upload_size_limit_is_enforced_during_streaming():
     with pytest.raises(UploadTooLarge):
         UploadValidator(max_bytes=4, allowed_media_types=frozenset({"application/pdf"})).stage(

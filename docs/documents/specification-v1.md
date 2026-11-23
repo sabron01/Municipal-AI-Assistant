@@ -1,6 +1,6 @@
 # Module Documents — spécification technique exécutable v1
 
-- Statut : contrat de référence et implémentation backend Documents, comptes/permissions et registre Administration disponibles sur `feat/documents-v1`; migrations vérifiées sur environnement local isolé, aucun déploiement effectué. Les données initiales et la configuration d’exposition restent à fournir.
+- Statut : contrat de référence et implémentation backend Documents, comptes/permissions et registre Administration disponibles sur `feat/documents-v1`; migrations vérifiées sur environnement local isolé, aucun déploiement effectué. La politique d'upload (formats, taille, PDF chiffrés) est validée par [ADR-014](../architecture/adr/ADR-014-documents-upload-policy.md); les autres décisions métier et la configuration d'exposition restent à fournir.
 - Date : 2026-11-22.
 - Portée : contrat métier/technique et suivi des validations locales; les migrations ont été appliquées à une base locale et à une base temporaire de test, sans déploiement partagé.
 - Décisions métier de référence : `DOC-001` à `DOC-004` dans [ADR-009](../architecture/adr/ADR-009-documents-module.md).
@@ -205,7 +205,7 @@ Les transactions distribuées sont impossibles. Sémantique retenue : PostgreSQL
 ## 12. Hypothèses et décisions métier ouvertes (bloquantes avant code exposé)
 
 1. Cycle de vie des entrées du registre : archivage/désactivation, déplacement et effet historique d’un renommage (différé après v1). Le registre PostgreSQL de l’application est la source de vérité; l’administrateur central créera les entrées initiales via l’API d’administration.
-2. Formats exacts, taille maximale, scan/quarantaine, documents protégés/chiffrés, règle MIME. Les routes restent fermées tant que la liste MIME et la limite d'upload ne sont pas configurées et que `DOCUMENT_POLICY_APPROVED` n'est pas passé à `true`.
+2. ~~Formats exacts, taille maximale, scan/quarantaine, documents protégés/chiffrés, règle MIME.~~ Résolu par [ADR-014](../architecture/adr/ADR-014-documents-upload-policy.md) : PDF, DOCX, XLSX, PPTX, PNG et JPEG ; 25 Mo ; aucun scan antivirus en v1 ; PDF chiffrés refusés. Les routes restent fermées tant que la configuration correspondante n'est pas complète et que `DOCUMENT_POLICY_APPROVED` n'est pas passé à `true`.
 3. Champs métier supplémentaires, unicité/format des références, convention de titre et langues.
 4. Suppression réversible ou définitive, rétention légale, purge physique et durée de conservation des sauvegardes/audits.
 5. Exigences de confidentialité/données personnelles, localisation, chiffrement et procédures de sauvegarde/restauration.

@@ -2,8 +2,17 @@ from types import SimpleNamespace
 from fastapi.testclient import TestClient
 from uuid import uuid4
 
+import pytest
+
 from municipal_assistant.accounts.security import digest_secret
 from municipal_assistant.app import create_app
+
+
+@pytest.fixture(autouse=True)
+def documents_unconfigured(monkeypatch):
+    for name in ("DOCUMENT_MAX_UPLOAD_BYTES", "DOCUMENT_ALLOWED_MEDIA_TYPES",
+                 "DOCUMENT_POLICY_APPROVED"):
+        monkeypatch.delenv(name, raising=False)
 
 
 def test_document_routes_fail_closed_without_identity_and_access_wiring():
