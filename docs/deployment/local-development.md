@@ -18,3 +18,14 @@ docker compose ps
 - Ollama : `127.0.0.1:11434`.
 
 Les ports sont liés à la boucle locale pour le développement. Ne pas utiliser ces identifiants ni cette topologie en environnement partagé ou en production; revoir réseau, TLS, sauvegardes et secrets avant toute exposition.
+
+## Module Documents (fermé par défaut)
+
+Les routes `/api/v1/documents` répondent `503` tant que la politique métier n'est pas décidée. L'activation technique se fait uniquement par configuration :
+
+- `DOCUMENT_MAX_UPLOAD_BYTES` : taille maximale en octets, strictement positive.
+- `DOCUMENT_ALLOWED_MEDIA_TYPES` : liste MIME séparée par des virgules ; seuls les types détectés par signature sont acceptés.
+- `DOCUMENT_POLICY_APPROVED` : `true` seulement après validation des décisions métier et revue QA/Security.
+- `OBJECT_STORAGE_ENDPOINT`, `OBJECT_STORAGE_BUCKET`, `RUSTFS_ACCESS_KEY`, `RUSTFS_SECRET_KEY` : accès RustFS ; `OBJECT_STORAGE_VERIFY_TLS` vaut `true` par défaut.
+
+Si une valeur manque alors que `DOCUMENT_POLICY_APPROVED=true`, l'application refuse de démarrer avec un message explicite. Si `DOCUMENT_POLICY_APPROVED=false`, les routes restent fermées même lorsque les autres valeurs sont renseignées.
