@@ -170,3 +170,146 @@ export function updateCategory(categoryId: string, name?: string | null, retenti
 export function renameCategory(categoryId: string, name: string) {
   return updateCategory(categoryId, name)
 }
+
+export type DocumentSummary = {
+  id: string
+  title: string
+  service_id: string
+  category_id: string
+  current_version_id: string
+  status: string
+  created_at: string
+  updated_at: string
+  description: string | null
+  reference_number: string | null
+  document_date: string
+  issuer: string | null
+  keywords: string[]
+  confidentiality_level: string | null
+  retention_code: string | null
+  aggregate_version: number
+}
+
+export type DocumentVersion = {
+  id: string
+  sequence: number
+  original_filename: string
+  detected_mime_type: string
+  size_bytes: number
+  sha256: string
+  created_at: string
+}
+
+export type DocumentPage = {
+  items: DocumentSummary[]
+  next_cursor: string | null
+}
+
+export type DocumentCreateInput = {
+  title: string
+  serviceId: string
+  categoryId: string
+  documentDate: string
+  referenceNumber: string
+  description?: string | null
+  issuer?: string | null
+  keywords?: string[]
+  confidentialityLevel?: string | null
+  retentionCode?: string | null
+  file: File
+}
+
+export function listDocuments(options: { serviceId?: string; categoryId?: string; cursor?: string; limit?: number } = {}) {
+  const params = new URLSearchParams()
+  if (options.serviceId) params.set('service_id', options.serviceId)
+  if (options.categoryId) params.set('category_id', options.categoryId)
+  if (options.cursor) params.set('cursor', options.cursor)
+  if (options.limit) params.set('limit', String(options.limit))
+  const query = params.toString()
+  return request<DocumentPage>(`/documents${query ? `?${query}` : ''}`)
+}
+
+export function getDocument(documentId: string) {
+  return request<DocumentSummary>(`/documents/${encodeURIComponent(documentId)}`)
+}
+
+export async function createDocument(input: DocumentCreateInput) {
+  const form = new FormData()
+  form.set('title', input.title)
+  form.set('service_id', input.serviceId)
+  form.set('category_id', input.categoryId)
+  form.set('document_date', input.documentDate)
+  form.set('reference_number', input.referenceNumber)
+  if (input.description) form.set('description', input.description)
+  if (input.issuer) form.set('issuer', input.issuer)
+  for (const keyword of input.keywords ?? []) form.append('keywords', keyword)
+  if (input.confidentialityLevel) form.set('confidentiality_level', input.confidentialityLevel)
+  if (input.retentionCode) form.set('retention_code', input.retentionCode)
+  form.set('file', input.file)
+  return request<DocumentSummary>('/documents', { method: 'POST', body: form })
+}
+
+export function updateDocument(documentId: string, payload: {
+  title: string
+  serviceId: string
+  categoryId: string
+  documentDate: string
+  referenceNumber: string
+  description?: string | null
+  issuer?: string | null
+  keywords?: string[]
+  confidentialityLevel?: string | null
+  retentionCode?: string | null
+}, ifMatch: string) {
+  return request<DocumentSummary>(`/documents/${encodeURIComponent(documentId)}`, {
+    method: 'PATCH',
+    body: JSON.stringify({
+      title: payload.title,
+      service_id: payload.serviceId,
+      category_id: payload.categoryId,
+      document_date: payload.documentDate,
+      reference_number: payload.referenceNumber,
+      description: payload.description ?? null,
+      issuer: payload.issuer ?? null,
+      keywords: payload.keywords ?? [],
+      confidentiality_level: payload.confidentialityLevel ?? null,
+      retention_code: payload.retentionCode ?? null,
+    }),
+    headers: { 'If-Match': ifMatch },
+  })
+}
+
+export function addDocumentVersion(documentId: string, file: File, ifMatch: string) {
+  const form = new FormData()
+  form.set('file', file)
+  return request<DocumentSummary>(`/documents/${encodeURIComponent(documentId)}/versions`, {
+    method: 'POST',
+    body: form,
+    headers: { 'If-Match': ifMatch },
+  })
+}
+
+export function listDocumentVersions(documentId: string) {
+  return request<DocumentVersion[]>(`/documents/${encodeURIComponent(documentId)}/versions`)
+}
+
+export function softDeleteDocument(documentId: string, ifMatch: string) {
+  return request<void>(`/documents/${encodeURIComponent(documentId)}`, {
+    method: 'DELETE',
+    headers: { 'If-Match': ifMatch },
+  })
+}
+
+export function restoreDocument(documentId: string, ifMatch: string) {
+  return request<DocumentSummary>(`/documents/${encodeURIComponent(documentId)}/restore`, {
+    method: 'POST',
+    headers: { 'If-Match': ifMatch },
+  })
+}
+
+export function purgeDocument(documentId: string, ifMatch: string) {
+  return request<void>(`/documents/${encodeURIComponent(documentId)}/purge`, {
+    method: 'DELETE',
+    headers: { 'If-Match': ifMatch },
+  })
+}

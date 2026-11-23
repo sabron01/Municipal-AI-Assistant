@@ -3,28 +3,40 @@ import {
   ApiError,
   createCategory,
   createDirection,
+  addDocumentVersion,
+  createDocument,
   createService,
   getCurrentAccount,
+  getDocument,
   listCategories,
   listDirections,
+  listDocumentVersions,
+  listDocuments,
   listServices,
   login,
   logout,
   renameCategory,
   renameDirection,
   renameService,
+  purgeDocument,
+  restoreDocument,
+  softDeleteDocument,
+  updateDocument,
   type Account,
   type Category,
   type Direction,
+  type DocumentSummary,
+  type DocumentVersion,
   type Service,
 } from './api'
 
-type Section = 'directions' | 'services' | 'categories'
+type Section = 'directions' | 'services' | 'categories' | 'documents'
 
 const sectionLabels: Record<Section, string> = {
   directions: 'Directions',
   services: 'Services',
   categories: 'Catégories',
+  documents: 'Documents',
 }
 
 function apiMessage(error: unknown) {
@@ -160,7 +172,62 @@ function CatalogWorkspace({ account, onLogout }: { account: Account; onLogout: (
   const [categoryName, setCategoryName] = useState('')
   const [categoryParent, setCategoryParent] = useState('')
   const [categoryRetention, setCategoryRetention] = useState('')
+  const [documents, setDocuments] = useState<DocumentSummary[]>([])
+  const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null)
+  const [selectedDocument, setSelectedDocument] = useState<DocumentSummary | null>(null)
+  const [documentVersions, setDocumentVersions] = useState<DocumentVersion[]>([])
+  const [docFilterService, setDocFilterService] = useState('')
+  const [docFilterCategory, setDocFilterCategory] = useState('')
+  const [docLoading, setDocLoading] = useState(false)
+  const [docBusy, setDocBusy] = useState(false)
+  const [docError, setDocError] = useState('')
+  const [docNotice, setDocNotice] = useState('')
+  const [showUpload, setShowUpload] = useState(false)
+  const [uploadTitle, setUploadTitle] = useState('')
+  const [uploadService, setUploadService] = useState('')
+  const [uploadCategory, setUploadCategory] = useState('')
+  const [uploadDate, setUploadDate] = useState('')
+  const [uploadReference, setUploadReference] = useState('')
+  const [uploadDescription, setUploadDescription] = useState('')
+  const [uploadIssuer, setUploadIssuer] = useState('')
+  const [uploadKeywords, setUploadKeywords] = useState('')
+  const [uploadConfidentiality, setUploadConfidentiality] = useState('')
+  const [uploadRetentionCode, setUploadRetentionCode] = useState('')
+  const [uploadFile, setUploadFile] = useState<File | null>(null)
 
+  const loadDocuments = useCallback(async () => {
+    setDocLoading(true)
+    setDocError('')
+    try {
+      const page = await listDocuments({ serviceId: docFilterService || undefined, categoryId: docFilterCategory || undefined, limit: 50 })
+      setDocuments(page.items)
+    } catch (cause) {
+      setDocError(apiMessage(cause))
+    } finally {
+      setDocLoading(false)
+    }
+  }, [docFilterService, docFilterCategory])
+
+  useEffect(() => {
+    if (section !== 'documents') return
+    void loadDocuments()
+  }, [section, loadDocuments])
+
+  const loadDocumentDetail = useCallback(async (id: string) => {
+    setDocError('')
+    try {
+      const [doc, versions] = await Promise.all([getDocument(id), listDocumentVersions(id)])
+      setSelectedDocument(doc)
+      setDocumentVersions(versions)
+    } catch (cause) {
+      setDocError(apiMessage(cause))
+    }
+  }, [])
+
+  useEffect(() => {
+    if (selectedDocumentId) void loadDocumentDetail(selectedDocumentId)
+    else { setSelectedDocument(null); setDocumentVersions([]) }
+  }, [selectedDocumentId, loadDocumentDetail])
   const loadCategories = useCallback(async () => {
     const roots = await listCategories({ rootsOnly: true })
     const children = await Promise.all(roots.map((root) => listCategories({ parentId: root.id })))
@@ -273,6 +340,7 @@ function CatalogWorkspace({ account, onLogout }: { account: Account; onLogout: (
     directions: 'Structurez les directions de la municipalité.',
     services: 'Rattachez chaque service à sa direction.',
     categories: 'Organisez les catégories et leurs sous-catégories.',
+    documents: 'Déposez, consultez et gérez les documents municipaux.',
   }
 
   return (
@@ -368,6 +436,156 @@ function CatalogWorkspace({ account, onLogout }: { account: Account; onLogout: (
                   </li>)}</ul>
                 )}
               </section>}
+            {section === 'documents' && <section className="panel" aria-labelledby="documents-panel-title">
+                 <div className="panel-header"><div><p className="eyebrow">Gestion documentaire</p><h2 id="documents-panel-title">Documents enregistrés</h2></div><span className="count-pill">{documents.length}</span></div>
+                 <div className="filter-row">
+                   <label className="field grow"><span>Service</span><select value={docFilterService} onChange={(event) => setDocFilterService(event.target.value)}><option value="">Tous les services</option>{services.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
+                   <label className="field grow"><span>Catégorie</span><select value={docFilterCategory} onChange={(event) => setDocFilterCategory(event.target.value)}><option value="">Toutes les catégories</option>{categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
+                   <button className="button button-primary" type="button" onClick={() => setShowUpload((v) => !v)} disabled={docBusy}>{showUpload ? 'Annuler' : 'Déposer un document'}</button>
+                 </div>
+                 {docError && <div className="feedback error page-feedback" role="alert">{docError}</div>}
+                 {docNotice && <div className="feedback success page-feedback" role="status">{docNotice}</div>}
+                 {showUpload && (
+                   <form className="create-row document-upload" onSubmit={async (event) => {
+                     event.preventDefault()
+                     if (!uploadFile) { setDocError('Sélectionnez un fichier.'); return }
+                     setDocBusy(true); setDocError(''); setDocNotice('')
+                     try {
+                       const created = await createDocument({
+                         title: uploadTitle, serviceId: uploadService, categoryId: uploadCategory,
+                         documentDate: uploadDate, referenceNumber: uploadReference,
+                         description: uploadDescription || null, issuer: uploadIssuer || null,
+                         keywords: uploadKeywords.split(',').map((k) => k.trim()).filter(Boolean),
+                         confidentialityLevel: uploadConfidentiality || null,
+                         retentionCode: uploadRetentionCode || null, file: uploadFile,
+                       })
+                       setShowUpload(false)
+                       setUploadTitle(''); setUploadService(''); setUploadCategory(''); setUploadDate(''); setUploadReference('')
+                       setUploadDescription(''); setUploadIssuer(''); setUploadKeywords(''); setUploadConfidentiality(''); setUploadRetentionCode(''); setUploadFile(null)
+                       setDocNotice('Document déposé.')
+                       await loadDocuments()
+                       setSelectedDocumentId(created.id)
+                     } catch (cause) { setDocError(apiMessage(cause)) }
+                     finally { setDocBusy(false) }
+                   }}>
+                     <label className="field grow"><span>Titre</span><input value={uploadTitle} onChange={(e) => setUploadTitle(e.target.value)} required maxLength={300} /></label>
+                     <label className="field"><span>Service</span><select value={uploadService} onChange={(e) => setUploadService(e.target.value)} required><option value="">Choisir</option>{services.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
+                     <label className="field"><span>Catégorie</span><select value={uploadCategory} onChange={(e) => setUploadCategory(e.target.value)} required><option value="">Choisir</option>{categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
+                     <label className="field"><span>Date du document</span><input type="date" value={uploadDate} onChange={(e) => setUploadDate(e.target.value)} required /></label>
+                     <label className="field"><span>Référence</span><input value={uploadReference} onChange={(e) => setUploadReference(e.target.value)} required maxLength={200} /></label>
+                     <label className="field grow"><span>Description</span><input value={uploadDescription} onChange={(e) => setUploadDescription(e.target.value)} maxLength={5000} /></label>
+                     <label className="field"><span>Émetteur</span><input value={uploadIssuer} onChange={(e) => setUploadIssuer(e.target.value)} maxLength={200} /></label>
+                     <label className="field grow"><span>Mots-clés (virgules)</span><input value={uploadKeywords} onChange={(e) => setUploadKeywords(e.target.value)} /></label>
+                     <label className="field"><span>Confidentialité</span><select value={uploadConfidentiality} onChange={(e) => setUploadConfidentiality(e.target.value)}><option value="">—</option><option value="public">Public</option><option value="interne">Interne</option><option value="confidentiel">Confidentiel</option><option value="secret">Secret</option></select></label>
+                     <label className="field"><span>Code de conservation</span><input value={uploadRetentionCode} onChange={(e) => setUploadRetentionCode(e.target.value)} maxLength={100} /></label>
+                     <label className="field"><span>Fichier</span><input type="file" onChange={(e) => setUploadFile(e.target.files?.[0] ?? null)} required /></label>
+                     <button className="button button-primary" type="submit" disabled={docBusy}>{docBusy ? 'Dépôt…' : 'Déposer'}</button>
+                   </form>
+                 )}
+                 {docLoading ? <div className="loading-panel" role="status"><span className="spinner" />Chargement…</div> : (
+                   documents.length === 0 ? <EmptyState title="Aucun document" text="Déposez un premier document pour commencer." /> : (
+                     <ul className="entry-list">
+                       {documents.map((doc) => <li className={`entry-row ${doc.status === 'deleted' ? 'deleted-row' : ''}`} key={doc.id}>
+                         <div className="entry-icon document-icon" aria-hidden="true">📄</div>
+                         <div className="entry-main">
+                           <button className="link-button" type="button" onClick={() => setSelectedDocumentId(doc.id)}><strong>{doc.title}</strong></button>
+                           <span>{doc.reference_number ?? '—'} · {doc.document_date} · {doc.status}</span>
+                         </div>
+                         <button className="button button-quiet button-small" type="button" onClick={() => setSelectedDocumentId(doc.id)}>Détails</button>
+                       </li>)}
+                     </ul>
+                   )
+                 )}
+                 {selectedDocument && (
+                   <div className="document-detail">
+                     <h3>{selectedDocument.title}</h3>
+                     <p className="muted">Référence {selectedDocument.reference_number} · Date {selectedDocument.document_date}</p>
+                     <p className="muted">Service {selectedDocument.service_id} · Catégorie {selectedDocument.category_id} · Statut {selectedDocument.status}</p>
+                     {selectedDocument.description && <p>{selectedDocument.description}</p>}
+                     {selectedDocument.issuer && <p className="muted">Émetteur : {selectedDocument.issuer}</p>}
+                     {selectedDocument.keywords.length > 0 && <p className="muted">Mots-clés : {selectedDocument.keywords.join(', ')}</p>}
+                     {selectedDocument.confidentiality_level && <p className="muted">Confidentialité : {selectedDocument.confidentiality_level}</p>}
+                     {selectedDocument.retention_code && <p className="muted">Conservation : {selectedDocument.retention_code}</p>}
+                     <div className="detail-actions">
+                       <a className="button button-secondary button-small" href={`/api/v1/documents/${selectedDocument.id}/content`} target="_blank" rel="noreferrer">Télécharger</a>
+                       <button className="button button-quiet button-small" type="button" disabled={docBusy} onClick={() => {
+                         const nextTitle = window.prompt('Nouveau titre', selectedDocument.title)
+                         if (!nextTitle) return
+                         void (async () => {
+                           setDocBusy(true); setDocError('')
+                           try {
+                             const updated = await updateDocument(selectedDocument.id, {
+                               title: nextTitle, serviceId: selectedDocument.service_id, categoryId: selectedDocument.category_id,
+                               documentDate: selectedDocument.document_date, referenceNumber: selectedDocument.reference_number ?? '',
+                               description: selectedDocument.description, issuer: selectedDocument.issuer,
+                               keywords: selectedDocument.keywords, confidentialityLevel: selectedDocument.confidentiality_level,
+                               retentionCode: selectedDocument.retention_code,
+                             }, String(selectedDocument.aggregate_version))
+                             setSelectedDocument(updated); setDocNotice('Métadonnées mises à jour.')
+                             await loadDocuments()
+                           } catch (cause) { setDocError(apiMessage(cause)) }
+                           finally { setDocBusy(false) }
+                         })()
+                       }}>Renommer</button>
+                       <label className="button button-quiet button-small">Nouvelle version<input type="file" hidden onChange={(e) => {
+                         const f = e.target.files?.[0]; if (!f) return
+                         void (async () => {
+                           setDocBusy(true); setDocError('')
+                           try {
+                             const updated = await addDocumentVersion(selectedDocument.id, f, String(selectedDocument.aggregate_version))
+                             setSelectedDocument(updated); setDocNotice('Version ajoutée.')
+                             await loadDocuments(); await loadDocumentDetail(selectedDocument.id)
+                           } catch (cause) { setDocError(apiMessage(cause)) }
+                           finally { setDocBusy(false); e.target.value = '' }
+                         })()
+                       }} /></label>
+                       {selectedDocument.status !== 'deleted' && <button className="button button-quiet button-small" type="button" disabled={docBusy} onClick={() => {
+                         if (!window.confirm('Supprimer ce document ?')) return
+                         void (async () => {
+                           setDocBusy(true); setDocError('')
+                           try {
+                             await softDeleteDocument(selectedDocument.id, String(selectedDocument.aggregate_version))
+                             setDocNotice('Document supprimé.')
+                             await loadDocuments(); await loadDocumentDetail(selectedDocument.id)
+                           } catch (cause) { setDocError(apiMessage(cause)) }
+                           finally { setDocBusy(false) }
+                         })()
+                       }}>Supprimer</button>}
+                       {selectedDocument.status === 'deleted' && <>
+                         <button className="button button-secondary button-small" type="button" disabled={docBusy} onClick={() => {
+                           void (async () => {
+                             setDocBusy(true); setDocError('')
+                             try {
+                               const updated = await restoreDocument(selectedDocument.id, String(selectedDocument.aggregate_version))
+                               setSelectedDocument(updated); setDocNotice('Document restauré.')
+                               await loadDocuments()
+                             } catch (cause) { setDocError(apiMessage(cause)) }
+                             finally { setDocBusy(false) }
+                           })()
+                         }}>Restaurer</button>
+                         <button className="button button-quiet button-small" type="button" disabled={docBusy} onClick={() => {
+                           if (!window.confirm('Purger définitivement ce document ?')) return
+                           void (async () => {
+                             setDocBusy(true); setDocError('')
+                             try {
+                               await purgeDocument(selectedDocument.id, String(selectedDocument.aggregate_version))
+                               setSelectedDocumentId(null); setDocNotice('Document purgé.')
+                               await loadDocuments()
+                             } catch (cause) { setDocError(apiMessage(cause)) }
+                             finally { setDocBusy(false) }
+                           })()
+                         }}>Purger</button>
+                       </>}
+                     </div>
+                     {documentVersions.length > 0 && (
+                       <div className="versions-list">
+                         <h4>Versions</h4>
+                         <ul>{documentVersions.map((v) => <li key={v.id}>{v.sequence}. {v.original_filename} ({v.detected_mime_type}, {v.size_bytes} o) — {v.created_at}</li>)}</ul>
+                       </div>
+                     )}
+                   </div>
+                 )}
+               </section>}
             </>
           )}
           <footer className="page-footer"><span>Les modifications sont conservées dans le registre de l’application.</span><span>Municipalité de Tataouine <b>·</b> Administration</span></footer>

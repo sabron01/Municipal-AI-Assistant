@@ -156,3 +156,9 @@
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+.deleted-row { opacity: 0.6; }
+.link-button { background: none; border: none; padding: 0; color: inherit; text-align: left; cursor: pointer; font: inherit; }
+.document-detail { margin-top: 1rem; padding: 1rem; border: 1px solid var(--border, #ddd); border-radius: 0.5rem; background: var(--surface, #fafafa); }
+.detail-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.75rem; }
+.versions-list { margin-top: 1rem; }
+.versions-list ul { padding-left: 1.25rem; }
