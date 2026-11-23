@@ -1,4 +1,5 @@
 from dataclasses import replace
+from datetime import date
 from io import BytesIO
 from uuid import uuid4
 
@@ -139,8 +140,7 @@ def make_service(*, storage=None, access=None):
 def make_create_command(service_id, category_id):
     return CreateDocument(
         " Budget 2026 ", service_id, category_id, "budget.pdf",
-        BytesIO(b"%PDF-1.7\nmunicipal budget"),
-    )
+        BytesIO(b"%PDF-1.7\nmunicipal budget"), date(2026, 1, 1), "REF-2026-001")
 
 
 def test_create_verifies_object_before_activating_document():
@@ -214,7 +214,9 @@ def test_moving_a_document_requires_permission_on_source_and_target_services():
     access.calls.clear()
 
     updated = service.update(document.id, actor_id, title="Budget 2026", description=None,
-        reference_number=None, service_id=target, category_id=category, expected_version=1)
+        reference_number="REF-2026-001", document_date=date(2026, 1, 1), issuer=None, keywords=(),
+        confidentiality_level=None, retention_code=None, service_id=target, category_id=category,
+        expected_version=1)
 
     assert updated.service_id == target
     assert access.calls == [

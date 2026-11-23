@@ -15,7 +15,8 @@ def make_document():
     version = DocumentVersion(version_id, document_id, 1, ObjectKey(f"documents/{uuid4()}"),
         Sha256("a" * 64), 12, "application/pdf", "report.pdf", now, None)
     return Document(document_id, "Annual report", ServiceId(uuid4()), CategoryId(uuid4()),
-        version_id, DocumentStatus.ACTIVE, now, None, now, versions=[version])
+        version_id, DocumentStatus.ACTIVE, now, None, now, reference_number="REF-1",
+        document_date=now.date(), versions=[version])
 
 
 def test_soft_delete_preserves_version_and_is_idempotent():
@@ -30,8 +31,10 @@ def test_soft_delete_preserves_version_and_is_idempotent():
 def test_metadata_update_rejects_stale_aggregate_version():
     document = make_document()
     with pytest.raises(ConcurrentModification):
-        document.update_metadata(title="Changed", description=None, reference_number=None,
-            service_id=document.service_id, category_id=document.category_id, expected_version=99)
+        document.update_metadata(title="Changed", description=None, reference_number="REF-1",
+            document_date=document.document_date, issuer=None, keywords=(), confidentiality_level=None,
+            retention_code=None, service_id=document.service_id, category_id=document.category_id,
+            expected_version=99)
 
 
 def test_deleted_document_cannot_receive_new_version():

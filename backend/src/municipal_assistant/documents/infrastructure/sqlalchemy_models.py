@@ -1,7 +1,7 @@
-from datetime import datetime
-from sqlalchemy import (BigInteger, Boolean, CheckConstraint, DateTime, ForeignKey, ForeignKeyConstraint,
+from datetime import date, datetime
+from sqlalchemy import (BigInteger, Boolean, CheckConstraint, Date, DateTime, ForeignKey, ForeignKeyConstraint,
                         Index, Integer, String, Text, UniqueConstraint, func, text)
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import ARRAY, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from uuid import uuid4
 
@@ -20,6 +20,7 @@ class DocumentRow(Base):
         Index("ix_documents_service_created", "service_id", text("created_at DESC"), text("id DESC")),
         Index("ix_documents_category_created", "category_id", text("created_at DESC"), text("id DESC")),
         Index("ix_documents_active", "created_at", "id", postgresql_where=text("status = 'active'")),
+        Index("uq_documents_reference_normalized", "reference_normalized", unique=True),
         {"schema": "documents"},
     )
     id: Mapped[object] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid4)
@@ -29,7 +30,14 @@ class DocumentRow(Base):
     current_version_id: Mapped[object] = mapped_column(UUID(as_uuid=True), nullable=False)
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="active")
     description: Mapped[str | None] = mapped_column(String(5000))
-    reference_number: Mapped[str | None] = mapped_column(String(200))
+    reference_number: Mapped[str] = mapped_column(String(200), nullable=False)
+    reference_normalized: Mapped[str] = mapped_column(String(200), nullable=False)
+    document_date: Mapped[date] = mapped_column(Date, nullable=False)
+    issuer: Mapped[str | None] = mapped_column(String(200))
+    keywords: Mapped[list[str]] = mapped_column(ARRAY(String(100)), nullable=False,
+        server_default=text("'{}'::varchar[]"))
+    confidentiality_level: Mapped[str | None] = mapped_column(String(100))
+    retention_code: Mapped[str | None] = mapped_column(String(100))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     created_by: Mapped[object | None] = mapped_column(UUID(as_uuid=True))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())

@@ -38,7 +38,7 @@ Types implémentés : `DocumentId`, `VersionId`, `ServiceId`, `CategoryId` (UUID
 
 ```python
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from enum import StrEnum
 from uuid import UUID
 
@@ -69,12 +69,16 @@ class Document:
     current_version_id: VersionId; status: DocumentStatus; created_at: datetime
     created_by: UUID | None; updated_at: datetime; deleted_at: datetime | None = None
     deleted_by: UUID | None = None; description: str | None = None
-    reference_number: str | None = None; aggregate_version: int = 1
+    reference_number: str; document_date: date; issuer: str | None = None
+    keywords: tuple[str, ...] = (); confidentiality_level: str | None = None
+    retention_code: str | None = None; aggregate_version: int = 1
 
     def add_version(self, version: DocumentVersion) -> None: ...
     def soft_delete(self, at: datetime, actor_id: UUID | None) -> None: ...
     def update_metadata(self, *, title: str, description: str | None,
-                        reference_number: str | None, service_id: ServiceId,
+                        reference_number: str, document_date: date, issuer: str | None,
+                        keywords: tuple[str, ...], confidentiality_level: str | None,
+                        retention_code: str | None, service_id: ServiceId,
                         category_id: CategoryId, expected_version: int) -> None: ...
 ```
 
@@ -133,7 +137,7 @@ Les use cases acceptent `ActorId` et un `DocumentAccessPolicy` abstrait. Tant qu
 ## 6. Schémas Pydantic (contrat indicatif)
 
 ```python
-from datetime import datetime
+from datetime import date, datetime
 from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -142,8 +146,13 @@ class DocumentCreate(BaseModel):
     title: str = Field(min_length=1, max_length=300)
     service_id: UUID
     category_id: UUID
+    document_date: date
+    reference_number: str = Field(min_length=1, max_length=200)
     description: str | None = Field(default=None, max_length=5000)
-    reference_number: str | None = Field(default=None, max_length=200)
+    issuer: str | None = Field(default=None, max_length=200)
+    keywords: list[str] = Field(default_factory=list, max_length=20)
+    confidentiality_level: str | None = Field(default=None, max_length=100)
+    retention_code: str | None = Field(default=None, max_length=100)
 
 class DocumentOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -200,13 +209,13 @@ Les transactions distribuées sont impossibles. Sémantique retenue : PostgreSQL
 
 **Unitaires** : invariants entités/VO, transitions version/suppression, permissions refusées par défaut, validation de taille/type/checksum, idempotence, conflit optimiste, mapping d’erreurs.
 
-**Intégration PostgreSQL** : contraintes uniques/FK/check, migrations up/down sur PostgreSQL réel, réservations concurrentes, tombstone invisible et historique préservé. **Contrat ObjectStorage** : même suite pour adaptateur faux/local et RustFS de test : put/head/open/checksum, objet absent, erreur/transitoire, flux, nettoyage d’objet non référencé. **API** : schémas, multipart limites, routes protégées, 404 anti-énumération, `If-Match`, streaming, Problem Details. **Sécurité** : path traversal, MIME spoofing, taille dépassée, nom actif, mauvais service, injection de filtres, credentials absents, logs sans données sensibles. Les tests unitaires couvrent domaine, validation d'upload, accès fail-closed, plafonnement des requêtes, registre Administration et cas d'utilisation dépôt/version. Dernière suite complète sans dépendances de test externes : 25 réussis, 4 tests PostgreSQL/RustFS ignorés faute de variables dédiées; un avertissement de dépréciation Starlette/httpx subsiste. Les 4 tests réels de `tests/integration/documents/test_postgres_rustfs.py` ont été exécutés séparément avec succès sur une base PostgreSQL temporaire migrée et RustFS local : parcours HTTP avec connexion, permissions et CSRF; création, liste, mise à jour des métadonnées, versions, téléchargements et suppression logique; rejet des champs multipart inconnus et de l'accès/création sans grant de service; refus d'If-Match périmé; réservation en attente et deux dépôts concurrents avec un seul gagnant. Un aller-retour Alembic complet (`downgrade base`, `upgrade head`) et `alembic check` ont aussi réussi; la base temporaire, vidée après les tests, a été supprimée. La base locale est à `20261122_05`. Les autres combinaisons d'erreurs HTTP et cas de sécurité listés ci-dessus restent à compléter.
+**Intégration PostgreSQL** : contraintes uniques/FK/check, migrations up/down sur PostgreSQL réel, réservations concurrentes, tombstone invisible et historique préservé. **Contrat ObjectStorage** : même suite pour adaptateur faux/local et RustFS de test : put/head/open/checksum, objet absent, erreur/transitoire, flux, nettoyage d’objet non référencé. **API** : schémas, multipart limites, routes protégées, 404 anti-énumération, `If-Match`, streaming, Problem Details. **Sécurité** : path traversal, MIME spoofing, taille dépassée, nom actif, mauvais service, injection de filtres, credentials absents, logs sans données sensibles. Les tests unitaires couvrent domaine, validation d'upload, accès fail-closed, plafonnement des requêtes, registre Administration et cas d'utilisation dépôt/version. Dernière suite complète sans dépendances de test externes : 25 réussis, 4 tests PostgreSQL/RustFS ignorés faute de variables dédiées; un avertissement de dépréciation Starlette/httpx subsiste. Les 4 tests réels de `tests/integration/documents/test_postgres_rustfs.py` ont été exécutés séparément avec succès sur une base PostgreSQL temporaire migrée et RustFS local : parcours HTTP avec connexion, permissions et CSRF; création, liste, mise à jour des métadonnées, versions, téléchargements et suppression logique; rejet des champs multipart inconnus et de l'accès/création sans grant de service; refus d'If-Match périmé; réservation en attente et deux dépôts concurrents avec un seul gagnant. Un aller-retour Alembic complet (`downgrade base`, `upgrade head`) et `alembic check` ont aussi réussi; la base temporaire, vidée après les tests, a été supprimée. La base locale est à `20261122_06`. Les autres combinaisons d'erreurs HTTP et cas de sécurité listés ci-dessus restent à compléter.
 
 ## 12. Hypothèses et décisions métier ouvertes (bloquantes avant code exposé)
 
 1. ~~Cycle de vie des entrées du registre : archivage/désactivation, déplacement et effet historique d'un renommage.~~ Résolu par [ADR-015](../architecture/adr/ADR-015-catalog-lifecycle.md) : renommage rétroactif accepté, aucune désactivation/archivage/suppression en v1, déplacement de document autorisé avec permission sur le Service source et le Service cible, reparentage de catégorie différé. Le registre PostgreSQL de l'application est la source de vérité; l'administrateur central crée les entrées initiales via l'API d'administration.
 2. ~~Formats exacts, taille maximale, scan/quarantaine, documents protégés/chiffrés, règle MIME.~~ Résolu par [ADR-014](../architecture/adr/ADR-014-documents-upload-policy.md) : PDF, DOCX, XLSX, PPTX, PNG et JPEG ; 25 Mo ; aucun scan antivirus en v1 ; PDF chiffrés refusés. Les routes restent fermées tant que la configuration correspondante n'est pas complète et que `DOCUMENT_POLICY_APPROVED` n'est pas passé à `true`.
-3. Champs métier supplémentaires, unicité/format des références, convention de titre et langues.
+3. ~~Champs métier supplémentaires, unicité/format des références, convention de titre et langues.~~ Résolu par [ADR-016](../architecture/adr/ADR-016-document-metadata.md) : titre + référence + date du document obligatoires; référence saisie manuellement, unique globalement (normalisée), sans motif imposé; émetteur, mots-clés, niveau de confidentialité et code de conservation inclus; date future autorisée; convention de titre documentée seulement, sans contrôle automatique.
 4. Suppression réversible ou définitive, rétention légale, purge physique et durée de conservation des sauvegardes/audits.
 5. Exigences de confidentialité/données personnelles, localisation, chiffrement et procédures de sauvegarde/restauration.
 

@@ -1,10 +1,39 @@
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from enum import StrEnum
+from unicodedata import normalize as normalize_unicode
 from uuid import UUID
 
 from .errors import ConcurrentModification, DocumentDeleted, InvalidDocument
 from .value_objects import CategoryId, DocumentId, ObjectKey, ServiceId, Sha256, VersionId
+
+MAX_KEYWORDS = 20
+MAX_KEYWORD_LENGTH = 100
+
+
+def normalize_reference(value: str) -> str:
+    """Return the stable comparison key used for global reference uniqueness."""
+    return normalize_unicode("NFKC", " ".join(value.split())).casefold()
+
+
+def validate_metadata(*, title: str, reference_number: str | None, document_date: date | None,
+                      issuer: str | None, keywords: tuple[str, ...],
+                      confidentiality_level: str | None, retention_code: str | None) -> None:
+    if not title or not title.strip() or len(title.strip()) > 300:
+        raise InvalidDocument("Title must contain between 1 and 300 characters")
+    if not reference_number or not reference_number.strip() or len(reference_number.strip()) > 200:
+        raise InvalidDocument("Reference number must contain between 1 and 200 characters")
+    if not isinstance(document_date, date):
+        raise InvalidDocument("Document date is required")
+    if issuer is not None and len(issuer.strip()) > 200:
+        raise InvalidDocument("Issuer must contain at most 200 characters")
+    if len(keywords) > MAX_KEYWORDS:
+        raise InvalidDocument(f"At most {MAX_KEYWORDS} keywords are allowed")
+    if any(not keyword.strip() or len(keyword.strip()) > MAX_KEYWORD_LENGTH for keyword in keywords):
+        raise InvalidDocument("Each keyword must contain between 1 and 100 characters")
+    for label, value in (("Confidentiality level", confidentiality_level), ("Retention code", retention_code)):
+        if value is not None and len(value.strip()) > 100:
+            raise InvalidDocument(f"{label} must contain at most 100 characters")
 
 
 class DocumentStatus(StrEnum):
@@ -55,6 +84,11 @@ class Document:
     deleted_by: UUID | None = None
     description: str | None = None
     reference_number: str | None = None
+    document_date: date = field(kw_only=True)
+    issuer: str | None = field(default=None, kw_only=True)
+    keywords: tuple[str, ...] = field(default=(), kw_only=True)
+    confidentiality_level: str | None = field(default=None, kw_only=True)
+    retention_code: str | None = field(default=None, kw_only=True)
     aggregate_version: int = 1
     versions: list[DocumentVersion] = field(default_factory=list)
 
@@ -85,13 +119,23 @@ class Document:
         self.aggregate_version += 1
 
     def update_metadata(self, *, title: str, description: str | None, reference_number: str | None,
+                        document_date: date, issuer: str | None, keywords: tuple[str, ...],
+                        confidentiality_level: str | None, retention_code: str | None,
                         service_id: ServiceId, category_id: CategoryId, expected_version: int) -> None:
         self._ensure_active()
         if self.aggregate_version != expected_version:
             raise ConcurrentModification("Document was changed by another request")
-        if not title.strip():
-            raise InvalidDocument("Title cannot be empty")
-        self.title, self.description, self.reference_number = title.strip(), description, reference_number
+        validate_metadata(title=title, reference_number=reference_number, document_date=document_date,
+            issuer=issuer, keywords=keywords, confidentiality_level=confidentiality_level,
+            retention_code=retention_code)
+        self.title = title.strip()
+        self.description = description
+        self.reference_number = reference_number.strip()
+        self.document_date = document_date
+        self.issuer = issuer.strip() if issuer else None
+        self.keywords = tuple(keyword.strip() for keyword in keywords)
+        self.confidentiality_level = confidentiality_level.strip() if confidentiality_level else None
+        self.retention_code = retention_code.strip() if retention_code else None
         self.service_id, self.category_id = service_id, category_id
         self.aggregate_version += 1
         self.updated_at = datetime.now(timezone.utc)

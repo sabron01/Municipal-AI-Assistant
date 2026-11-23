@@ -24,4 +24,4 @@
 - [ ] Revue QA/Security indépendante et première exécution de la CI sur GitHub.
 - [x] Corrections issues de la revue QA/Security du Sprint 1 (contrastes WCAG AA, déconnexion mobile, `Cache-Control: no-store`, garde d'accès unique, message d'indisponibilité au démarrage) : 82 tests backend (4 ignorés) et 26 tests frontend réussis le 2026-11-23.
 
-Les formats, la taille maximale et le refus des PDF chiffrés sont validés dans l'ADR-014; le cycle de vie du registre, les champs métier, la rétention et la confidentialité restent non validés. Les routes Documents restent fermées par défaut tant que la configuration n'est pas complète et approuvée. Toute case non cochée reste inachevée.
+Les formats, la taille maximale et le refus des PDF chiffrés sont validés dans l'ADR-014; le cycle de vie du registre dans l'ADR-015; les champs métier et références dans l'ADR-016. La rétention (D4) et la confidentialité (D5) restent non validées. Les routes Documents restent fermées par défaut tant que la configuration n'est pas complète et approuvée. Toute case non cochée reste inachevée.

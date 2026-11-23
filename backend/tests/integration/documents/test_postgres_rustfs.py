@@ -11,7 +11,7 @@ from io import BytesIO
 
 import boto3
 import pytest
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from botocore.config import Config
 from sqlalchemy import create_engine, delete, select
 from sqlalchemy.orm import sessionmaker
@@ -130,7 +130,7 @@ def test_document_versions_round_trip_through_postgres_and_rustfs(real_adapters)
     second_body = b"%PDF-1.7\nsecond version"
 
     document = service.create(CreateDocument("Integration report", service_id, category_id,
-        "report.pdf", BytesIO(first_body)), actor_id)
+        "report.pdf", BytesIO(first_body), date(2026, 1, 1), "INT-001"), actor_id)
     first_version = document.current_version_id
     updated = service.add_version(document.id, BytesIO(second_body), "report-v2.pdf",
         actor_id, expected_version=document.aggregate_version)
@@ -163,7 +163,8 @@ def test_document_versions_round_trip_through_postgres_and_rustfs(real_adapters)
 def test_pending_version_reservation_blocks_a_second_upload(real_adapters):
     service, _storage, _engine, actor_id, bucket, s3 = real_adapters
     document = service.create(CreateDocument("Concurrent report", ServiceId(uuid4()),
-        CategoryId(uuid4()), "report.pdf", BytesIO(b"%PDF-1.7\ninitial")), actor_id)
+        CategoryId(uuid4()), "report.pdf", BytesIO(b"%PDF-1.7\ninitial"),
+        date(2026, 1, 1), f"CONC-{uuid4().hex[:8]}"), actor_id)
     pending_id = VersionId(uuid4())
     pending = DocumentVersion(pending_id, document.id, 2,
         ObjectKey(f"documents/{document.id.value}/{pending_id.value}"),
@@ -184,7 +185,8 @@ def test_pending_version_reservation_blocks_a_second_upload(real_adapters):
 def test_two_simultaneous_version_uploads_have_one_winner(real_adapters):
     service, _storage, _engine, actor_id, bucket, s3 = real_adapters
     document = service.create(CreateDocument("Concurrent report", ServiceId(uuid4()),
-        CategoryId(uuid4()), "report.pdf", BytesIO(b"%PDF-1.7\ninitial")), actor_id)
+        CategoryId(uuid4()), "report.pdf", BytesIO(b"%PDF-1.7\ninitial"),
+        date(2026, 1, 1), f"CONC-{uuid4().hex[:8]}"), actor_id)
     barrier = Barrier(2)
 
     def upload(filename, payload):
@@ -284,12 +286,14 @@ def test_fastapi_document_flow_uses_account_permissions_and_csrf(real_adapters, 
             csrf = login.json()["csrf_token"]
             invalid = client.post("/api/v1/documents", headers={"X-CSRF-Token": csrf},
                 data={"title": "HTTP integration report", "service_id": str(service_id),
-                      "category_id": str(category_id), "unexpected": "reject me"},
+                      "category_id": str(category_id), "document_date": "2026-01-01",
+                      "reference_number": "HTTP-REF-1", "unexpected": "reject me"},
                 files={"file": ("report.pdf", b"%PDF-1.7\nfirst HTTP version", "application/pdf")})
             assert invalid.status_code == 422
             created = client.post("/api/v1/documents", headers={"X-CSRF-Token": csrf},
                 data={"title": "HTTP integration report", "service_id": str(service_id),
-                      "category_id": str(category_id)},
+                      "category_id": str(category_id), "document_date": "2026-01-01",
+                      "reference_number": "HTTP-REF-1"},
                 files={"file": ("report.pdf", b"%PDF-1.7\nfirst HTTP version", "application/pdf")})
             assert created.status_code == 201, created.text
             document_id = created.json()["id"]
@@ -297,7 +301,8 @@ def test_fastapi_document_flow_uses_account_permissions_and_csrf(real_adapters, 
 
             denied_create = client.post("/api/v1/documents", headers={"X-CSRF-Token": csrf},
                 data={"title": "Unassigned report", "service_id": str(other_service_id),
-                      "category_id": str(category_id)},
+                      "category_id": str(category_id), "document_date": "2026-01-01",
+                      "reference_number": "HTTP-REF-2"},
                 files={"file": ("blocked.pdf", b"%PDF-1.7\nblocked", "application/pdf")})
             assert denied_create.status_code == 404
             assert client.get("/api/v1/documents", params={"service_id": str(other_service_id)}).json()["items"] == []
@@ -305,7 +310,8 @@ def test_fastapi_document_flow_uses_account_permissions_and_csrf(real_adapters, 
             metadata = client.patch(f"/api/v1/documents/{document_id}",
                 headers={"X-CSRF-Token": csrf, "If-Match": created.headers["etag"]},
                 json={"title": "Renamed integration report", "service_id": str(service_id),
-                      "category_id": str(category_id), "description": None, "reference_number": None})
+                      "category_id": str(category_id), "document_date": "2026-01-02",
+                      "reference_number": "HTTP-REF-1-RENAMED", "description": None})
             assert metadata.status_code == 200, metadata.text
             assert metadata.json()["title"] == "Renamed integration report"
 

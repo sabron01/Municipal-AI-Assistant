@@ -1,5 +1,7 @@
-from datetime import datetime
+from datetime import date, datetime
+from typing import Annotated
 from uuid import UUID
+
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -8,8 +10,14 @@ class DocumentCreate(BaseModel):
     title: str = Field(min_length=1, max_length=300)
     service_id: UUID
     category_id: UUID
+    document_date: date
+    reference_number: str = Field(min_length=1, max_length=200)
     description: str | None = Field(default=None, max_length=5000)
-    reference_number: str | None = Field(default=None, max_length=200)
+    issuer: str | None = Field(default=None, max_length=200)
+    keywords: list[Annotated[str, Field(min_length=1, max_length=100)]] = Field(
+        default_factory=list, max_length=20)
+    confidentiality_level: str | None = Field(default=None, max_length=100)
+    retention_code: str | None = Field(default=None, max_length=100)
 
 
 class DocumentPatch(BaseModel):
@@ -17,8 +25,14 @@ class DocumentPatch(BaseModel):
     title: str = Field(min_length=1, max_length=300)
     service_id: UUID
     category_id: UUID
+    document_date: date
+    reference_number: str = Field(min_length=1, max_length=200)
     description: str | None = Field(default=None, max_length=5000)
-    reference_number: str | None = Field(default=None, max_length=200)
+    issuer: str | None = Field(default=None, max_length=200)
+    keywords: list[Annotated[str, Field(min_length=1, max_length=100)]] = Field(
+        default_factory=list, max_length=20)
+    confidentiality_level: str | None = Field(default=None, max_length=100)
+    retention_code: str | None = Field(default=None, max_length=100)
 
 
 class VersionOut(BaseModel):
@@ -44,6 +58,11 @@ class DocumentOut(BaseModel):
     updated_at: datetime
     description: str | None
     reference_number: str | None
+    document_date: date
+    issuer: str | None
+    keywords: list[str]
+    confidentiality_level: str | None
+    retention_code: str | None
     aggregate_version: int
 
 

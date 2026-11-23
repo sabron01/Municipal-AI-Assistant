@@ -10,5 +10,6 @@ class InvalidUpload(DocumentError): pass
 class UploadTooLarge(InvalidUpload): pass
 class UnsupportedMediaType(InvalidUpload): pass
 class ConcurrentModification(DocumentError): pass
+class ReferenceConflict(DocumentError): pass
 class DependencyUnavailable(DocumentError): pass
 class AccessPolicyUnavailable(DocumentError): pass

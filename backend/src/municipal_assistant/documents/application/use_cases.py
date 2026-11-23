@@ -1,9 +1,9 @@
 from dataclasses import dataclass, replace
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import BinaryIO
 from uuid import UUID, uuid4
 
-from ..domain.entities import Document, DocumentStatus, DocumentVersion, VersionState
+from ..domain.entities import Document, DocumentStatus, DocumentVersion, VersionState, validate_metadata
 from ..domain.errors import (ConcurrentModification, DependencyUnavailable, DocumentNotFound,
                              InvalidDocument, InvalidUpload)
 from ..domain.ports import (CategoryDirectory, DocumentAccessPolicy, DocumentQuery, ObjectStorage,
@@ -18,8 +18,13 @@ class CreateDocument:
     category_id: CategoryId
     filename: str
     body: BinaryIO
+    document_date: date
+    reference_number: str
     description: str | None = None
-    reference_number: str | None = None
+    issuer: str | None = None
+    keywords: tuple[str, ...] = ()
+    confidentiality_level: str | None = None
+    retention_code: str | None = None
 
 
 class DocumentService:
@@ -32,6 +37,9 @@ class DocumentService:
     def create(self, command: CreateDocument, actor_id: UUID) -> Document:
         self._authorize(actor_id, "document.create", None, write=True, service_id=command.service_id)
         self._validate_references(command.service_id, command.category_id)
+        validate_metadata(title=command.title, reference_number=command.reference_number,
+            document_date=command.document_date, issuer=command.issuer, keywords=command.keywords,
+            confidentiality_level=command.confidentiality_level, retention_code=command.retention_code)
         staged = self.validator.stage(command.body, filename=command.filename)
         document_id, version_id = DocumentId(uuid4()), VersionId(uuid4())
         key = ObjectKey(f"documents/{document_id.value}/{version_id.value}")
@@ -43,8 +51,10 @@ class DocumentService:
                 document = Document(document_id, command.title.strip(), command.service_id, command.category_id,
                     version_id, DocumentStatus.PENDING, datetime.now(timezone.utc), actor_id,
                     datetime.now(timezone.utc), description=command.description,
-                    reference_number=command.reference_number, versions=[])
-                self._validate_title(document.title)
+                    reference_number=command.reference_number, document_date=command.document_date,
+                    issuer=command.issuer, keywords=command.keywords,
+                    confidentiality_level=command.confidentiality_level,
+                    retention_code=command.retention_code, versions=[])
                 uow.documents.save(document)
                 uow.documents.reserve_version(version)
                 uow.commit()
@@ -163,8 +173,9 @@ class DocumentService:
             raise
 
     def update(self, document_id: DocumentId, actor_id: UUID, *, title: str, description: str | None,
-               reference_number: str | None, service_id: ServiceId, category_id: CategoryId,
-               expected_version: int) -> Document:
+               reference_number: str, document_date: date, issuer: str | None, keywords: tuple[str, ...],
+               confidentiality_level: str | None, retention_code: str | None, service_id: ServiceId,
+               category_id: CategoryId, expected_version: int) -> Document:
         with self.uow_factory() as uow:
             document = self._get(uow, document_id)
             self._authorize(actor_id, "document.metadata_update", document, write=True)
@@ -173,6 +184,8 @@ class DocumentService:
                                 service_id=service_id)
             self._validate_references(service_id, category_id)
             document.update_metadata(title=title, description=description, reference_number=reference_number,
+                                     document_date=document_date, issuer=issuer, keywords=keywords,
+                                     confidentiality_level=confidentiality_level, retention_code=retention_code,
                                      service_id=service_id, category_id=category_id,
                                      expected_version=expected_version)
             uow.documents.save(document, expected_aggregate_version=expected_version)
@@ -249,11 +262,6 @@ class DocumentService:
                     document_id=document.id if document else None, outcome="denied")
                 audit_uow.commit()
             raise
-
-    @staticmethod
-    def _validate_title(title: str) -> None:
-        if not title or len(title) > 300:
-            raise InvalidDocument("Title must contain between 1 and 300 characters")
 
     @staticmethod
     def _get(uow, document_id: DocumentId, *, include_pending: bool = False) -> Document:

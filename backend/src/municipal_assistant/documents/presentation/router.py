@@ -1,4 +1,5 @@
 from collections.abc import Iterator
+from datetime import date
 from typing import Annotated
 from uuid import UUID
 from urllib.parse import quote
@@ -63,7 +64,9 @@ def _document_out(document: Document) -> DocumentOut:
         category_id=document.category_id.value, current_version_id=document.current_version_id.value,
         status=document.status.value, created_at=document.created_at, updated_at=document.updated_at,
         description=document.description, reference_number=document.reference_number,
-        aggregate_version=document.aggregate_version)
+        document_date=document.document_date, issuer=document.issuer,
+        keywords=list(document.keywords), confidentiality_level=document.confidentiality_level,
+        retention_code=document.retention_code, aggregate_version=document.aggregate_version)
 
 
 def _version_out(version) -> VersionOut:
@@ -96,20 +99,30 @@ async def create_document(request: Request,
                     title: Annotated[str, Form(min_length=1, max_length=300)],
                     service_id: Annotated[UUID, Form()],
                     category_id: Annotated[UUID, Form()],
+                    document_date: Annotated[date, Form()],
+                    reference_number: Annotated[str, Form(min_length=1, max_length=200)],
                     file: Annotated[UploadFile, File()], response: Response,
                     description: Annotated[str | None, Form(max_length=5000)] = None,
-                    reference_number: Annotated[str | None, Form(max_length=200)] = None,
+                    issuer: Annotated[str | None, Form(max_length=200)] = None,
+                    keywords: Annotated[list[str] | None, Form()] = None,
+                    confidentiality_level: Annotated[str | None, Form(max_length=100)] = None,
+                    retention_code: Annotated[str | None, Form(max_length=100)] = None,
                     csrf_header: Annotated[str | None, Header(alias="X-CSRF-Token")] = None):
     _require_csrf(request, csrf_header)
     form = await request.form()
-    allowed_fields = {"title", "service_id", "category_id", "description", "reference_number", "file"}
+    allowed_fields = {"title", "service_id", "category_id", "document_date", "reference_number",
+        "description", "issuer", "keywords", "confidentiality_level", "retention_code", "file"}
     if set(form.keys()) - allowed_fields:
         raise HTTPException(status_code=422, detail="Unexpected multipart form field")
     payload = DocumentCreate(title=title, service_id=service_id, category_id=category_id,
-        description=description, reference_number=reference_number)
+        document_date=document_date, reference_number=reference_number, description=description,
+        issuer=issuer, keywords=keywords or [], confidentiality_level=confidentiality_level,
+        retention_code=retention_code)
     document = _service(request).create(CreateDocument(payload.title, ServiceId(payload.service_id),
-        CategoryId(payload.category_id), file.filename or "upload", file.file, payload.description,
-        payload.reference_number), _actor(request))
+        CategoryId(payload.category_id), file.filename or "upload", file.file,
+        payload.document_date, payload.reference_number, payload.description, payload.issuer,
+        tuple(payload.keywords), payload.confidentiality_level, payload.retention_code),
+        _actor(request))
     response.headers["Location"] = f"{request.url.path}/{document.id.value}"
     response.headers["ETag"] = _etag(document)
     return _document_out(document)
@@ -137,6 +150,8 @@ def update_document(request: Request, document_id: UUID, payload: DocumentPatch,
     _require_csrf(request, csrf_header)
     document = _service(request).update(DocumentId(document_id), _actor(request), title=payload.title,
         description=payload.description, reference_number=payload.reference_number,
+        document_date=payload.document_date, issuer=payload.issuer, keywords=tuple(payload.keywords),
+        confidentiality_level=payload.confidentiality_level, retention_code=payload.retention_code,
         service_id=ServiceId(payload.service_id), category_id=CategoryId(payload.category_id),
         expected_version=_expected_version(if_match))
     response.headers["ETag"] = _etag(document)

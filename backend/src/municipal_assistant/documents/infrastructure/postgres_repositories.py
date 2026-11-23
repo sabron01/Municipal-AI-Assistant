@@ -5,10 +5,11 @@ from uuid import UUID, uuid4
 from sqlalchemy import create_engine, select, update, func, and_, or_
 from sqlalchemy.orm import Session, sessionmaker, selectinload
 
-from ..domain.entities import Document, DocumentStatus, DocumentVersion, VersionState
-from ..domain.errors import ConcurrentModification, DependencyUnavailable, InvalidPageCursor
+from ..domain.entities import Document, DocumentStatus, DocumentVersion, VersionState, normalize_reference
+from ..domain.errors import (ConcurrentModification, DependencyUnavailable, InvalidPageCursor, ReferenceConflict)
 from ..domain.ports import DocumentQuery, Page
 from ..domain.value_objects import CategoryId, DocumentId, ObjectKey, ServiceId, Sha256, VersionId
+from sqlalchemy.exc import IntegrityError
 from .sqlalchemy_models import Base, DocumentAuditRow, DocumentRow, DocumentVersionRow, OutboxRow
 
 
@@ -122,11 +123,22 @@ class PostgresDocumentRepository:
             event.completed = True
 
     def save(self, document: Document, *, expected_aggregate_version: int | None = None) -> None:
+        try:
+            self._save(document, expected_aggregate_version=expected_aggregate_version)
+        except IntegrityError as exc:
+            if _is_reference_conflict(exc):
+                raise ReferenceConflict("A document with this reference number already exists") from exc
+            raise
+
+    def _save(self, document: Document, *, expected_aggregate_version: int | None = None) -> None:
         row = self.session.get(DocumentRow, document.id.value)
         if row is None:
             row = DocumentRow(id=document.id.value, title=document.title, service_id=document.service_id.value,
                 category_id=document.category_id.value, current_version_id=document.current_version_id.value,
                 status=document.status.value, description=document.description, reference_number=document.reference_number,
+                reference_normalized=normalize_reference(document.reference_number),
+                document_date=document.document_date, issuer=document.issuer, keywords=list(document.keywords),
+                confidentiality_level=document.confidentiality_level, retention_code=document.retention_code,
                 created_at=document.created_at, created_by=document.created_by, updated_at=document.updated_at,
                 deleted_at=document.deleted_at, deleted_by=document.deleted_by,
                 aggregate_version=document.aggregate_version)
@@ -140,6 +152,9 @@ class PostgresDocumentRepository:
                     title=document.title, service_id=document.service_id.value, category_id=document.category_id.value,
                     current_version_id=document.current_version_id.value, status=document.status.value,
                     description=document.description, reference_number=document.reference_number,
+                    reference_normalized=normalize_reference(document.reference_number),
+                    document_date=document.document_date, issuer=document.issuer, keywords=list(document.keywords),
+                    confidentiality_level=document.confidentiality_level, retention_code=document.retention_code,
                     updated_at=document.updated_at, deleted_at=document.deleted_at, deleted_by=document.deleted_by,
                     aggregate_version=document.aggregate_version).execution_options(synchronize_session=False))
                 if result.rowcount != 1:
@@ -149,6 +164,10 @@ class PostgresDocumentRepository:
                 row.title, row.service_id, row.category_id = document.title, document.service_id.value, document.category_id.value
                 row.current_version_id, row.status = document.current_version_id.value, document.status.value
                 row.description, row.reference_number = document.description, document.reference_number
+                row.reference_normalized = normalize_reference(document.reference_number)
+                row.document_date, row.issuer = document.document_date, document.issuer
+                row.keywords, row.confidentiality_level = list(document.keywords), document.confidentiality_level
+                row.retention_code = document.retention_code
                 row.updated_at, row.deleted_at, row.deleted_by = document.updated_at, document.deleted_at, document.deleted_by
                 row.aggregate_version = document.aggregate_version
         existing = set(self.session.scalars(select(DocumentVersionRow.id).where(
@@ -185,7 +204,9 @@ def _to_domain(row: DocumentRow) -> Document:
     return Document(DocumentId(row.id), row.title, ServiceId(row.service_id), CategoryId(row.category_id),
         VersionId(row.current_version_id), DocumentStatus(row.status), row.created_at, row.created_by,
         row.updated_at, row.deleted_at, row.deleted_by, row.description, row.reference_number,
-        row.aggregate_version, versions)
+        document_date=row.document_date, issuer=row.issuer, keywords=tuple(row.keywords or ()),
+        confidentiality_level=row.confidentiality_level, retention_code=row.retention_code,
+        aggregate_version=row.aggregate_version, versions=versions)
 
 
 def _encode_cursor(created_at: datetime, document_id: UUID) -> str:
@@ -193,7 +214,12 @@ def _encode_cursor(created_at: datetime, document_id: UUID) -> str:
     return base64.urlsafe_b64encode(raw.encode()).decode().rstrip("=")
 
 
-def _decode_cursor(cursor: str) -> tuple[str, str]:
+def _is_reference_conflict(exc: IntegrityError) -> bool:
+    diag = getattr(exc.orig, "diag", None)
+    name = getattr(diag, "constraint_name", None)
+    if name == "uq_documents_reference_normalized":
+        return True
+    return "reference_normalized" in str(exc.orig)
     try:
         raw = base64.urlsafe_b64decode(cursor + "=" * (-len(cursor) % 4)).decode()
         created_at, document_id = raw.split("|", 1)
