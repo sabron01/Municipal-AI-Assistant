@@ -32,4 +32,4 @@ Les comptes sont gérés par l'application. L'administrateur central crée, dés
 
 ## Conséquence immédiate
 
-Ces décisions ne changent pas encore `DocumentAccessPolicy`, ne créent pas le module de comptes et n'activent aucune route. Les choix reportés n'empêchent pas la conception v1. L'authentification reste fermée jusqu'à mise en place des prérequis techniques ci-dessus.
+Le module de comptes et `DatabaseDocumentAccessPolicy` sont implémentés. Les routes Documents restent non exposées tant que les prérequis techniques d'exposition (bootstrap, SMTP, politique MIME/taille, revue QA/Security) ne sont pas remplis. Les choix reportés n'empêchent pas la conception v1.

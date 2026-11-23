@@ -1,6 +1,6 @@
 # Proposition de Sprint 1 — Interface du registre Administration
 
-- Statut : périmètre recommandé retenu pour la poursuite du projet; implémentation en cours.
+- Statut : périmètre recommandé retenu pour la poursuite du projet; implémentation réalisée, revue QA/Security et tests frontend à compléter.
 - Dépendances : contrat de l’API `/admin/catalog` existant; source de vérité confirmée dans ADR-013.
 - Hors périmètre : aucun changement backend, aucune saisie d’une liste officielle prédéfinie, aucune interface de dépôt de documents.
 

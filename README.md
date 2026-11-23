@@ -1,13 +1,13 @@
 # Municipal AI Assistant — Tataouine
 
-Monorepo et **monolithe modulaire DDD**, avec PostgreSQL + pgvector, RustFS, Ollama et des outils MCP internes. Le module Documents v1 dispose d'une implémentation backend initiale dans `backend/`; l'interface frontend n'est pas encore développée.
+Monorepo et **monolithe modulaire DDD**, avec PostgreSQL + pgvector, RustFS, Ollama et des outils MCP internes. Le module Documents v1 dispose d'une implémentation backend initiale dans `backend/` et l'interface React d'administration du registre est implémentée dans `frontend/`; l'interface Documents et le dépôt de fichiers ne sont pas encore couverts.
 
 ## Statut
 - Socle local : démarré et vérifié le 2026-11-22 (PostgreSQL, RustFS, Ollama, API FastAPI).
-- Module Documents v1 : backend, contrôle d'accès par service et registre Direction/Service/Catégorie implémentés sur `feat/documents-v1`; l’interface React d’administration du registre est en cours.
+- Module Documents v1 : backend, contrôle d'accès par service et registre Direction/Service/Catégorie implémentés sur `feat/documents-v1`; l’interface React d’administration du registre est implémentée, la revue QA et les tests frontend restent à compléter.
 - Authentification : comptes applicatifs et permissions par action implémentés; l'administrateur initial local est activé, avec Mailpit pour les courriels de développement.
 - Modèles LLM / embeddings : benchmark à réaliser avant sélection.
-- Interface React : écran d’administration du registre en cours d’implémentation; l’interface Documents et le dépôt de fichiers ne sont pas encore couverts.
+- Interface React : écran d’administration du registre implémenté; l’interface Documents et le dépôt de fichiers ne sont pas encore couverts.
 - Sauvegardes : non configurées ni testées.
 
 ## Structure
