@@ -18,7 +18,7 @@
 
 - [x] Migration `20261122_01` appliquée sur PostgreSQL local et révision courante vérifiée.
 - [x] Bucket RustFS privé créé; smoke test S3 `put/head(SHA-256)/get` réussi et objet de test supprimé.
-- [x] Tests backend : 25 réussis et 4 ignorés le 2026-11-22 (les 4 tests d'intégration PostgreSQL/RustFS nécessitent une configuration dédiée).
+- [x] Tests backend : 77 réussis et 4 ignorés le 2026-11-23, dont 52 tests comptes/authentification (les 4 tests d'intégration PostgreSQL/RustFS nécessitent une configuration dédiée).
 - [ ] Intégration automatisée complète sur PostgreSQL/RustFS et revue QA/Security indépendante.
 
 Les règles métier relatives aux formats, tailles, identité, autorisations et conservation ne sont pas validées; les routes Documents restent donc fermées par défaut. Toute case non cochée reste inachevée.
