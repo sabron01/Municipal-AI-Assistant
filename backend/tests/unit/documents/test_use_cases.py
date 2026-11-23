@@ -203,3 +203,22 @@ def test_checksum_mismatch_keeps_reservation_pending_for_reconciliation():
     assert document.status.value == "pending"
     assert next(iter(repository.versions_by_id.values())).state is VersionState.PENDING
     assert len(storage.objects) == 1
+
+
+def test_moving_a_document_requires_permission_on_source_and_target_services():
+    service, _repository, _storage, access, audit = make_service()
+    actor_id = uuid4()
+    source, target = ServiceId(uuid4()), ServiceId(uuid4())
+    category = CategoryId(uuid4())
+    document = service.create(make_create_command(source, category), actor_id)
+    access.calls.clear()
+
+    updated = service.update(document.id, actor_id, title="Budget 2026", description=None,
+        reference_number=None, service_id=target, category_id=category, expected_version=1)
+
+    assert updated.service_id == target
+    assert access.calls == [
+        (actor_id, "document.metadata_update", source),
+        (actor_id, "document.metadata_update", target),
+    ]
+    assert any(event[1] == "document.metadata_updated" for event in audit)

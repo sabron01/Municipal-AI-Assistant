@@ -204,7 +204,7 @@ Les transactions distribuées sont impossibles. Sémantique retenue : PostgreSQL
 
 ## 12. Hypothèses et décisions métier ouvertes (bloquantes avant code exposé)
 
-1. Cycle de vie des entrées du registre : archivage/désactivation, déplacement et effet historique d’un renommage (différé après v1). Le registre PostgreSQL de l’application est la source de vérité; l’administrateur central créera les entrées initiales via l’API d’administration.
+1. ~~Cycle de vie des entrées du registre : archivage/désactivation, déplacement et effet historique d'un renommage.~~ Résolu par [ADR-015](../architecture/adr/ADR-015-catalog-lifecycle.md) : renommage rétroactif accepté, aucune désactivation/archivage/suppression en v1, déplacement de document autorisé avec permission sur le Service source et le Service cible, reparentage de catégorie différé. Le registre PostgreSQL de l'application est la source de vérité; l'administrateur central crée les entrées initiales via l'API d'administration.
 2. ~~Formats exacts, taille maximale, scan/quarantaine, documents protégés/chiffrés, règle MIME.~~ Résolu par [ADR-014](../architecture/adr/ADR-014-documents-upload-policy.md) : PDF, DOCX, XLSX, PPTX, PNG et JPEG ; 25 Mo ; aucun scan antivirus en v1 ; PDF chiffrés refusés. Les routes restent fermées tant que la configuration correspondante n'est pas complète et que `DOCUMENT_POLICY_APPROVED` n'est pas passé à `true`.
 3. Champs métier supplémentaires, unicité/format des références, convention de titre et langues.
 4. Suppression réversible ou définitive, rétention légale, purge physique et durée de conservation des sauvegardes/audits.
