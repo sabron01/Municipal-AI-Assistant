@@ -8,10 +8,12 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, EmailStr, Field
 
 from .email import EmailDeliveryUnavailable
+from .guards import account_service as _service
+from .guards import current_account as _current
+from .guards import require_central_admin as _require_admin
+from .guards import require_csrf as _require_csrf
 from .models import AccountRow
-from .security import digest_secret, secure_equal
-from .service import (AccountConflict, AccountNotFound, AccountService, InvalidAccountToken,
-                      PERMISSIONS)
+from .service import AccountConflict, AccountNotFound, InvalidAccountToken, PERMISSIONS
 
 router = APIRouter(tags=["accounts"])
 
@@ -27,39 +29,6 @@ class AccountCreateIn(BaseModel):
 
 class PermissionsIn(BaseModel):
     permissions: list[str]
-
-
-def _service(request: Request) -> AccountService:
-    service = getattr(request.app.state, "account_service", None)
-    if service is None or not service.settings.auth_enabled:
-        raise HTTPException(503, "Account services are not configured")
-    return service
-
-
-def _current(request: Request):
-    service = _service(request)
-    pair = service.current_session(request.cookies.get(service.settings.session_cookie_name))
-    if pair is None:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Authentication required")
-    return pair
-
-
-def _require_csrf(request: Request, csrf_header: str | None) -> None:
-    settings = _service(request).settings
-    csrf_cookie = request.cookies.get(settings.csrf_cookie_name)
-    pair = _current(request)
-    if (not csrf_cookie or not csrf_header or not secure_equal(csrf_cookie, csrf_header)
-            or not secure_equal(digest_secret(csrf_cookie), pair[1].csrf_hash)):
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "CSRF validation failed")
-
-
-def _require_admin(request: Request, csrf_header: str | None = None):
-    account, session = _current(request)
-    if request.method not in {"GET", "HEAD", "OPTIONS"}:
-        _require_csrf(request, csrf_header)
-    if not account.is_central_admin:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Central administrator permission required")
-    return account
 
 
 def _account_out(account: AccountRow) -> dict:

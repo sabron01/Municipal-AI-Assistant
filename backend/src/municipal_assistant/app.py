@@ -1,3 +1,4 @@
+import logging
 from uuid import uuid4
 from tempfile import SpooledTemporaryFile
 from inspect import isawaitable, iscoroutinefunction
@@ -17,6 +18,10 @@ from .accounts.settings import AccountSettings
 from .accounts.service import DatabaseDocumentAccessPolicy
 from .administration.composition import build_catalog_service
 from .administration.presentation.router import router as administration_router
+from .documents.infrastructure.activation import build_configured_document_service
+from .documents.infrastructure.settings import DocumentSettings
+
+logger = logging.getLogger(__name__)
 
 
 class UploadBodyLimitMiddleware:
@@ -115,6 +120,8 @@ def create_app() -> FastAPI:
         request.state.request_id = str(uuid4())
         response = await call_next(request)
         response.headers["X-Request-ID"] = request.state.request_id
+        if request.url.path.startswith("/api/v1"):
+            response.headers.setdefault("Cache-Control", "no-store")
         return response
 
     @app.get("/health", include_in_schema=False)
@@ -156,6 +163,15 @@ def create_app() -> FastAPI:
     app.include_router(documents_router, prefix="/api/v1")
     app.include_router(accounts_router, prefix="/api/v1")
     app.include_router(administration_router, prefix="/api/v1")
+    document_settings = DocumentSettings.from_environment()
+    if document_settings.requested and not document_settings.policy_approved:
+        logger.warning("Documents settings are present but DOCUMENT_POLICY_APPROVED is false; "
+                       "the /documents routes remain closed")
+    elif document_settings.requested:
+        document_service = build_configured_document_service(document_settings)
+        configure_documents(app, service=document_service,
+                            actor_resolver=app.state.actor_resolver,
+                            business_policy_approved=True)
     return app
 
 

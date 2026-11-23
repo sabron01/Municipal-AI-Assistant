@@ -38,7 +38,7 @@ function apiMessage(error: unknown) {
   return 'La requête n’a pas abouti. Vérifiez la connexion puis réessayez.'
 }
 
-function LoginScreen({ onLogin }: { onLogin: (email: string, password: string) => Promise<void> }) {
+function LoginScreen({ onLogin, serviceError }: { onLogin: (email: string, password: string) => Promise<void>; serviceError?: string }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
@@ -66,6 +66,7 @@ function LoginScreen({ onLogin }: { onLogin: (email: string, password: string) =
         <p className="eyebrow">Municipalité de Tataouine</p>
         <h1 id="login-title">Espace d’administration</h1>
         <p className="muted login-copy">Connectez-vous avec votre compte professionnel pour gérer les référentiels.</p>
+        {serviceError && <p className="feedback error login-alert" role="alert">{serviceError}</p>}
         <form className="form-stack" onSubmit={submit}>
           <label className="field">
             <span>Adresse professionnelle</span>
@@ -159,41 +160,43 @@ function CatalogWorkspace({ account, onLogout }: { account: Account; onLogout: (
   const [categoryName, setCategoryName] = useState('')
   const [categoryParent, setCategoryParent] = useState('')
 
-  const refresh = useCallback(async () => {
-    const [nextDirections, nextServices, nextCategories] = await Promise.all([
-      listDirections(), listServices(), listCategories(),
-    ])
-    setDirections(nextDirections)
-    setServices(nextServices)
-    setCategories(nextCategories)
-    setSelectedDirection((current) => current || nextDirections[0]?.id || '')
-    setServiceDirection((current) => current || nextDirections[0]?.id || '')
+  const loadCategories = useCallback(async () => {
+    const roots = await listCategories({ rootsOnly: true })
+    const children = await Promise.all(roots.map((root) => listCategories({ parentId: root.id })))
+    return [...roots, ...children.flat()]
   }, [])
+
+  const loadCatalog = useCallback(async (directionId: string) => {
+    const nextDirections = await listDirections()
+    const nextDirection = directionId || nextDirections[0]?.id || ''
+    const [nextServices, nextCategories] = await Promise.all([
+      nextDirection ? listServices(nextDirection) : Promise.resolve<Service[]>([]),
+      loadCategories(),
+    ])
+    return { nextDirections, nextDirection, nextServices, nextCategories }
+  }, [loadCategories])
+
+  const applyCatalog = useCallback((catalog: Awaited<ReturnType<typeof loadCatalog>>) => {
+    setDirections(catalog.nextDirections)
+    setSelectedDirection(catalog.nextDirection)
+    setServiceDirection((current) => current || catalog.nextDirection)
+    setServices(catalog.nextServices)
+    setCategories(catalog.nextCategories)
+  }, [])
+
+  const refresh = useCallback(async () => {
+    applyCatalog(await loadCatalog(selectedDirection))
+  }, [applyCatalog, loadCatalog, selectedDirection])
 
   useEffect(() => {
     let mounted = true
-    async function loadInitialCatalog() {
-      try {
-        const [nextDirections, nextServices, nextCategories] = await Promise.all([
-          listDirections(), listServices(), listCategories(),
-        ])
-        if (!mounted) return
-        setDirections(nextDirections)
-        setServices(nextServices)
-        setCategories(nextCategories)
-        setSelectedDirection((current) => current || nextDirections[0]?.id || '')
-        setServiceDirection((current) => current || nextDirections[0]?.id || '')
-      } catch (cause) {
-        if (mounted) setError(apiMessage(cause))
-      } finally {
-        if (mounted) setLoading(false)
-      }
-    }
-    void loadInitialCatalog()
+    void loadCatalog('')
+      .then((catalog) => { if (mounted) applyCatalog(catalog) })
+      .catch((cause: unknown) => { if (mounted) setError(apiMessage(cause)) })
+      .finally(() => { if (mounted) setLoading(false) })
     return () => { mounted = false }
-  }, [])
+  }, [applyCatalog, loadCatalog])
 
-  const activeServices = useMemo(() => services.filter((service) => service.direction_id === selectedDirection), [services, selectedDirection])
   const roots = useMemo(() => categories.filter((category) => category.parent_id === null), [categories])
   const orderedCategories = useMemo(() => {
     const children = new Map<string, Category[]>()
@@ -332,15 +335,15 @@ function CatalogWorkspace({ account, onLogout }: { account: Account; onLogout: (
               </section>}
 
               {section === 'services' && <section className="panel" aria-labelledby="services-panel-title">
-                <div className="panel-header"><div><p className="eyebrow">Axe organisationnel</p><h2 id="services-panel-title">Services enregistrés</h2></div><span className="count-pill">{activeServices.length}</span></div>
+                <div className="panel-header"><div><p className="eyebrow">Axe organisationnel</p><h2 id="services-panel-title">Services enregistrés</h2></div><span className="count-pill">{services.length}</span></div>
                 <div className="filter-row"><label className="field grow"><span>Filtrer par Direction</span><select value={selectedDirection} onChange={(event) => void changeDirection(event.target.value)} disabled={directions.length === 0}><option value="">Choisir une Direction</option>{directions.map((direction) => <option key={direction.id} value={direction.id}>{direction.name}</option>)}</select></label></div>
                 <form className="create-row" onSubmit={(event) => void submitService(event)}>
                   <label className="field grow"><span>Nom du Service</span><input value={serviceName} maxLength={200} onChange={(event) => setServiceName(event.target.value)} placeholder="Ex. Service de l’état civil" /></label>
                   <label className="field parent-field"><span>Direction parente</span><select value={serviceDirection} onChange={(event) => setServiceDirection(event.target.value)} disabled={directions.length === 0}><option value="">Choisir</option>{directions.map((direction) => <option key={direction.id} value={direction.id}>{direction.name}</option>)}</select></label>
                   <button className="button button-primary" type="submit" disabled={busy || directions.length === 0}><span aria-hidden="true">＋</span> Ajouter</button>
                 </form>
-                {directions.length === 0 ? <EmptyState title="Ajoutez d’abord une Direction" text="Chaque Service doit être rattaché à une Direction existante." /> : activeServices.length === 0 ? <EmptyState title="Aucun Service dans cette Direction" text="Ajoutez un Service pour compléter le registre." /> : (
-                  <ul className="entry-list">{activeServices.map((service) => <li className="entry-row" key={service.id}>
+                {directions.length === 0 ? <EmptyState title="Ajoutez d’abord une Direction" text="Chaque Service doit être rattaché à une Direction existante." /> : services.length === 0 ? <EmptyState title="Aucun Service dans cette Direction" text="Ajoutez un Service pour compléter le registre." /> : (
+                  <ul className="entry-list">{services.map((service) => <li className="entry-row" key={service.id}>
                     <div className="entry-icon service-icon" aria-hidden="true">S</div>
                     <div className="entry-main">{editing === service.id ? <NameEditor label={`service-${service.id}`} initialName={service.name} busy={busy} onCancel={() => setEditing(null)} onSave={async (name) => { await run(() => renameService(service.id, name), 'Service renommé.') }} /> : <><strong>{service.name}</strong><span>{service.direction_name}</span></>}</div>
                     {editing !== service.id && <button className="button button-quiet button-small" type="button" onClick={() => setEditing(service.id)} aria-label={`Renommer ${service.name}`}>Renommer</button>}
@@ -380,6 +383,7 @@ export default function App() {
   const [account, setAccount] = useState<Account | null>(null)
   const [checkingSession, setCheckingSession] = useState(true)
   const [accessDenied, setAccessDenied] = useState(false)
+  const [startupError, setStartupError] = useState('')
 
   useEffect(() => {
     let mounted = true
@@ -388,15 +392,16 @@ export default function App() {
       setAccount(current)
       setAccessDenied(!current.is_central_admin)
     }).catch((cause: unknown) => {
-      if (mounted && !(cause instanceof ApiError && cause.status === 401)) {
-        setAccessDenied(true)
-      }
+      if (!mounted) return
+      if (cause instanceof ApiError && cause.status === 401) return
+      setStartupError(apiMessage(cause))
     }).finally(() => { if (mounted) setCheckingSession(false) })
     return () => { mounted = false }
   }, [])
 
   async function authenticate(email: string, password: string) {
     const current = await login(email, password)
+    setStartupError('')
     setAccount(current)
     setAccessDenied(!current.is_central_admin)
   }
@@ -412,6 +417,6 @@ export default function App() {
 
   if (checkingSession) return <main className="boot-screen"><div className="brand-mark" aria-hidden="true">T</div><span className="spinner" /><p>Vérification de la session…</p></main>
   if (accessDenied && account) return <AccessDenied onLogout={() => void signOut()} />
-  if (!account) return <LoginScreen onLogin={authenticate} />
+  if (!account) return <LoginScreen onLogin={authenticate} serviceError={startupError} />
   return <CatalogWorkspace account={account} onLogout={signOut} />
 }

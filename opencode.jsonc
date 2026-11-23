@@ -1,0 +1,83 @@
+{
+    "$schema": "https://opencode.ai/config.json",
+    // Modèle local par défaut
+    //"model": "ollama/qwen2.5-coder:7b",
+    "model": "ollama/qwen2.5-coder:3b",
+    "agents": {
+        "build": {
+            "model": "ollama/qwen2.5-coder:3b",
+            "permissions": [
+                {
+                    "action": "shell",
+                    "resource": "git push *",
+                    "effect": "ask"
+                }
+            ]
+        }
+    },
+    "experimental": {
+        // Autoriser le suivi des tâches
+        "todo": true,
+        // Profondeur de délégation
+        "subagent_depth": 1
+    },
+    // Permissions générales
+    "permissions": [
+        {
+            "action": "read",
+            "resource": "*",
+            "effect": "allow"
+        },
+        {
+            "action": "read",
+            "resource": "*.env",
+            "effect": "ask"
+        },
+        {
+            "action": "read",
+            "resource": "*.env.*",
+            "effect": "ask"
+        },
+        {
+            "action": "edit",
+            "resource": "*",
+            "effect": "ask"
+        },
+        {
+            "action": "edit",
+            "resource": "*.env*",
+            "effect": "deny"
+        },
+        {
+            "action": "shell",
+            "resource": "*",
+            "effect": "ask"
+        },
+        {
+            "action": "subagent",
+            "resource": "*",
+            "effect": "allow"
+        }
+    ],
+    "mcp": {
+        "servers": {
+            "context7": {
+                "type": "remote",
+                "url": "https://mcp.context7.com/mcp"
+            },
+            // Serveur MCP interne non implémenté : laisser désactivé.
+            "municipal-documents": {
+                "type": "local",
+                "command": [
+                    "uv",
+                    "run",
+                    "python",
+                    "-m",
+                    "TON_MODULE_MCP"
+                ],
+                "cwd": "C:/Users/commu/dev_projects/Municipal-AI-Assistant",
+                "disabled": true
+            }
+        }
+    }
+}

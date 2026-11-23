@@ -205,11 +205,11 @@ Les transactions distribuées sont impossibles. Sémantique retenue : PostgreSQL
 ## 12. Hypothèses et décisions métier ouvertes (bloquantes avant code exposé)
 
 1. Cycle de vie des entrées du registre : archivage/désactivation, déplacement et effet historique d’un renommage (différé après v1). Le registre PostgreSQL de l’application est la source de vérité; l’administrateur central créera les entrées initiales via l’API d’administration.
-2. Formats exacts, taille maximale, scan/quarantaine, documents protégés/chiffrés, règle MIME. Les routes restent fermées tant que la liste MIME et la limite d’upload ne sont pas configurées.
+2. Formats exacts, taille maximale, scan/quarantaine, documents protégés/chiffrés, règle MIME. Les routes restent fermées tant que la liste MIME et la limite d'upload ne sont pas configurées et que `DOCUMENT_POLICY_APPROVED` n'est pas passé à `true`.
 3. Champs métier supplémentaires, unicité/format des références, convention de titre et langues.
 4. Suppression réversible ou définitive, rétention légale, purge physique et durée de conservation des sauvegardes/audits.
 5. Exigences de confidentialité/données personnelles, localisation, chiffrement et procédures de sauvegarde/restauration.
 
 Les comptes applicatifs, la visibilité par service, les permissions explicites par action, l'administrateur central et la politique d'accès fail-closed sont définis dans ADR-011/012 et implémentés. Délégations et accès temporaires sont différés après v1.
 
-Les valeurs techniques proposées (300 caractères titre, 5 000 description, 200 référence) sont des bornes de schéma initiales à confirmer, et non des règles métier validées. Les endpoints sont présents mais échouent fermés par défaut; leur configuration exige des adaptateurs d'identité et de registre validés, une liste MIME et une limite d'upload explicites, puis un gate QA/Security.
+Les valeurs techniques proposées (300 caractères titre, 5 000 description, 200 référence) sont des bornes de schéma initiales à confirmer, et non des règles métier validées. Les endpoints sont présents mais échouent fermés par défaut; l'activation technique est câblée par configuration (`DOCUMENT_MAX_UPLOAD_BYTES`, `DOCUMENT_ALLOWED_MEDIA_TYPES`, `DOCUMENT_POLICY_APPROVED`) et exige toujours des adaptateurs d'identité et de registre validés, une liste MIME et une limite d'upload explicites, puis un gate QA/Security. Aucune valeur métier n'est fournie par défaut.
