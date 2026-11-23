@@ -191,3 +191,21 @@ def delete_document(request: Request, document_id: UUID, if_match: Annotated[str
                     csrf_header: Annotated[str | None, Header(alias="X-CSRF-Token")] = None):
     _require_csrf(request, csrf_header)
     _service(request).soft_delete(DocumentId(document_id), _actor(request), _expected_version(if_match))
+
+
+@router.post("/{document_id}/restore", response_model=DocumentOut)
+def restore_document(request: Request, document_id: UUID, response: Response,
+                     if_match: Annotated[str | None, Header()] = None,
+                     csrf_header: Annotated[str | None, Header(alias="X-CSRF-Token")] = None):
+    _require_csrf(request, csrf_header)
+    document = _service(request).restore(DocumentId(document_id), _actor(request),
+        _expected_version(if_match))
+    response.headers["ETag"] = _etag(document)
+    return _document_out(document)
+
+
+@router.delete("/{document_id}/purge", status_code=status.HTTP_204_NO_CONTENT)
+def purge_document(request: Request, document_id: UUID, if_match: Annotated[str | None, Header()] = None,
+                   csrf_header: Annotated[str | None, Header(alias="X-CSRF-Token")] = None):
+    _require_csrf(request, csrf_header)
+    _service(request).purge(DocumentId(document_id), _actor(request), _expected_version(if_match))

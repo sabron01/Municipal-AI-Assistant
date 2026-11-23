@@ -23,7 +23,8 @@ class SqlAlchemyCatalogRepository:
 
     @staticmethod
     def _category(row: CategoryRow, parent_name: str | None) -> Category:
-        return Category(row.id, row.parent_id, parent_name, row.name, row.created_at)
+        return Category(row.id, row.parent_id, parent_name, row.name, row.created_at,
+            retention_years=row.retention_years)
 
     @staticmethod
     def _record_audit(session, *, actor_id: UUID, entity_type: str, entity_id: UUID, action: str) -> None:
@@ -153,7 +154,7 @@ class SqlAlchemyCatalogRepository:
                     for row, parent_name in session.execute(statement)]
 
     def create_category(self, *, parent_id: UUID | None, name: str, normalized_name: str,
-                        actor_id: UUID) -> Category:
+                        actor_id: UUID, retention_years: int | None = None) -> Category:
         with self.session_factory() as session:
             parent_name = None
             if parent_id is not None:
@@ -162,7 +163,8 @@ class SqlAlchemyCatalogRepository:
                     raise CatalogEntryNotFound("Parent category was not found")
                 parent_name = parent.name
             row = CategoryRow(id=uuid4(), parent_id=parent_id, name=name,
-                normalized_name=normalized_name, created_by=actor_id)
+                normalized_name=normalized_name, created_by=actor_id,
+                retention_years=retention_years)
             session.add(row)
             try:
                 session.flush()
@@ -176,7 +178,8 @@ class SqlAlchemyCatalogRepository:
             return self._category(row, parent_name)
 
     def rename_category(self, category_id: UUID, *, name: str, normalized_name: str,
-                        actor_id: UUID) -> Category:
+                        actor_id: UUID, retention_years: int | None = None,
+                        update_retention: bool = False) -> Category:
         parent = aliased(CategoryRow)
         with self.session_factory() as session:
             result = session.execute(select(CategoryRow, parent.name).outerjoin(
@@ -186,6 +189,8 @@ class SqlAlchemyCatalogRepository:
                 raise CatalogEntryNotFound("Category was not found")
             row, parent_name = result
             row.name, row.normalized_name = name, normalized_name
+            if update_retention:
+                row.retention_years = retention_years
             try:
                 session.flush()
                 self._record_audit(session, actor_id=actor_id, entity_type="category",

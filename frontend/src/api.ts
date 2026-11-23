@@ -26,6 +26,7 @@ export type Category = {
   parent_name: string | null
   name: string
   created_at: string
+  retention_years: number | null
 }
 
 export class ApiError extends Error {
@@ -149,16 +150,23 @@ export function listCategories(options: CategoryQuery = {}) {
   return request<Category[]>(`/admin/catalog/categories${query ? `?${query}` : ''}`)
 }
 
-export function createCategory(parentId: string | null, name: string) {
+export function createCategory(parentId: string | null, name: string, retentionYears?: number | null) {
   return request<Category>('/admin/catalog/categories', {
     method: 'POST',
-    body: JSON.stringify({ parent_id: parentId, name }),
+    body: JSON.stringify({ parent_id: parentId, name, retention_years: retentionYears ?? null }),
+  })
+}
+
+export function updateCategory(categoryId: string, name?: string | null, retentionYears?: number | null, updateRetention = false) {
+  const body: Record<string, unknown> = {}
+  if (name !== undefined && name !== null) body.name = name
+  if (updateRetention) body.retention_years = retentionYears ?? null
+  return request<Category>(`/admin/catalog/categories/${encodeURIComponent(categoryId)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
   })
 }
 
 export function renameCategory(categoryId: string, name: string) {
-  return request<Category>(`/admin/catalog/categories/${encodeURIComponent(categoryId)}`, {
-    method: 'PATCH',
-    body: JSON.stringify({ name }),
-  })
+  return updateCategory(categoryId, name)
 }

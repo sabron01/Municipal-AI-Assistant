@@ -4,6 +4,7 @@ class DocumentError(Exception):
 
 class DocumentNotFound(DocumentError): pass
 class DocumentDeleted(DocumentError): pass
+class DocumentNotDeleted(DocumentError): pass
 class InvalidDocument(DocumentError): pass
 class InvalidPageCursor(DocumentError): pass
 class InvalidUpload(DocumentError): pass

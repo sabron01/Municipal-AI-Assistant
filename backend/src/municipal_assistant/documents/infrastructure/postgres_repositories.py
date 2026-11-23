@@ -75,7 +75,20 @@ class PostgresDocumentRepository:
         next_cursor = _encode_cursor(rows[-1].created_at, rows[-1].id) if has_more and rows else None
         return Page(tuple(_to_domain(row) for row in rows), next_cursor)
 
+    def purge(self, document_id: DocumentId) -> None:
+        from sqlalchemy import delete as sa_delete
+        version_ids = select(DocumentVersionRow.id).where(DocumentVersionRow.document_id == document_id.value)
+        self.session.execute(sa_delete(OutboxRow).where(OutboxRow.version_id.in_(version_ids)))
+        self.session.execute(sa_delete(DocumentVersionRow).where(DocumentVersionRow.document_id == document_id.value))
+        self.session.execute(sa_delete(DocumentAuditRow).where(DocumentAuditRow.document_id == document_id.value))
+        self.session.execute(sa_delete(DocumentRow).where(DocumentRow.id == document_id.value))
+        self.session.flush()
+
     def next_sequence(self, document_id: DocumentId) -> int:
+        self.session.scalar(select(DocumentRow.id).where(DocumentRow.id == document_id.value).with_for_update())
+        value = self.session.scalar(select(func.max(DocumentVersionRow.sequence)).where(
+            DocumentVersionRow.document_id == document_id.value))
+        return (value or 0) + 1
         self.session.scalar(select(DocumentRow.id).where(DocumentRow.id == document_id.value).with_for_update())
         value = self.session.scalar(select(func.max(DocumentVersionRow.sequence)).where(
             DocumentVersionRow.document_id == document_id.value))

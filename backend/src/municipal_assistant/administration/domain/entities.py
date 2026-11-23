@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from uuid import UUID
 
@@ -26,3 +26,4 @@ class Category:
     parent_name: str | None
     name: str
     created_at: datetime
+    retention_years: int | None = field(default=None, kw_only=True)

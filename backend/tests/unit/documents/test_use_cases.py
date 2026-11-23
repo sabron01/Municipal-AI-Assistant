@@ -30,6 +30,12 @@ class MemoryRepository:
     def save(self, document, *, expected_aggregate_version=None):
         self.documents[document.id.value] = document
 
+    def purge(self, document_id):
+        self.documents.pop(document_id.value, None)
+        for version_id in [vid for vid, v in self.versions_by_id.items()
+                           if v.document_id == document_id]:
+            self.versions_by_id.pop(version_id, None)
+
     def reserve_version(self, version, *, expected_aggregate_version=None):
         self.versions_by_id[version.id.value] = version
         self.outbox.add(version.id.value)

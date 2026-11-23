@@ -6,7 +6,7 @@ from fastapi import APIRouter, Header, HTTPException, Request, status
 from ...accounts.guards import require_central_admin as _admin
 from ..application.use_cases import CatalogUseCases
 from ..domain.errors import CatalogConflict, CatalogEntryNotFound, InvalidCatalogEntry
-from .schemas import (CategoryCreateIn, CategoryOut, DirectionOut, NameIn,
+from .schemas import (CategoryCreateIn, CategoryOut, CategoryUpdateIn, DirectionOut, NameIn,
                       ServiceCreateIn, ServiceOut)
 
 router = APIRouter(prefix="/admin/catalog", tags=["administration-catalog"])
@@ -101,16 +101,19 @@ def create_category(payload: CategoryCreateIn, request: Request,
     actor = _admin(request, csrf_header)
     try:
         return _catalog(request).create_category(parent_id=payload.parent_id,
-            name=payload.name, actor_id=actor.id)
+            name=payload.name, actor_id=actor.id, retention_years=payload.retention_years)
     except (CatalogConflict, CatalogEntryNotFound, InvalidCatalogEntry) as exc:
         raise _translate(exc) from exc
 
 
 @router.patch("/categories/{category_id}", response_model=CategoryOut)
-def rename_category(category_id: UUID, payload: NameIn, request: Request,
+def update_category(category_id: UUID, payload: CategoryUpdateIn, request: Request,
                     csrf_header: Annotated[str | None, Header(alias="X-CSRF-Token")] = None):
     actor = _admin(request, csrf_header)
     try:
-        return _catalog(request).rename_category(category_id, name=payload.name, actor_id=actor.id)
+        retention_provided = "retention_years" in payload.model_fields_set
+        return _catalog(request).update_category(category_id, name=payload.name,
+            retention_years=payload.retention_years, update_retention=retention_provided,
+            actor_id=actor.id)
     except (CatalogConflict, CatalogEntryNotFound, InvalidCatalogEntry) as exc:
         raise _translate(exc) from exc

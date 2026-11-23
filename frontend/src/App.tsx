@@ -159,6 +159,7 @@ function CatalogWorkspace({ account, onLogout }: { account: Account; onLogout: (
   const [serviceDirection, setServiceDirection] = useState('')
   const [categoryName, setCategoryName] = useState('')
   const [categoryParent, setCategoryParent] = useState('')
+  const [categoryRetention, setCategoryRetention] = useState('')
 
   const loadCategories = useCallback(async () => {
     const roots = await listCategories({ rootsOnly: true })
@@ -254,8 +255,8 @@ function CatalogWorkspace({ account, onLogout }: { account: Account; onLogout: (
 
   async function submitCategory(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    await createNamed(categoryName, (name) => createCategory(categoryParent || null, name),
-      categoryParent ? 'Sous-catégorie ajoutée au registre.' : 'Catégorie ajoutée au registre.', () => setCategoryName(''))
+    await createNamed(categoryName, (name) => createCategory(categoryParent || null, name, categoryRetention ? Number(categoryRetention) : null),
+      categoryParent ? 'Sous-catégorie ajoutée au registre.' : 'Catégorie ajoutée au registre.', () => { setCategoryName(''); setCategoryRetention('') })
   }
 
   async function changeDirection(directionId: string) {
@@ -356,12 +357,13 @@ function CatalogWorkspace({ account, onLogout }: { account: Account; onLogout: (
                 <form className="create-row" onSubmit={(event) => void submitCategory(event)}>
                   <label className="field grow"><span>Nom de la catégorie</span><input value={categoryName} maxLength={200} onChange={(event) => setCategoryName(event.target.value)} placeholder="Ex. Ressources humaines" /></label>
                   <label className="field parent-field"><span>Catégorie parente <span className="optional">(facultatif)</span></span><select value={categoryParent} onChange={(event) => setCategoryParent(event.target.value)}><option value="">Créer une catégorie principale</option>{roots.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
+                  <label className="field retention-field"><span>Rétention (années, facultatif)</span><input type="number" min={1} value={categoryRetention} onChange={(event) => setCategoryRetention(event.target.value)} placeholder="Indéfinie" /></label>
                   <button className="button button-primary" type="submit" disabled={busy}><span aria-hidden="true">＋</span> Ajouter</button>
                 </form>
                 {categories.length === 0 ? <EmptyState title="Aucune catégorie pour le moment" text="Ajoutez une catégorie principale, puis complétez-la avec des sous-catégories." /> : (
                   <ul className="entry-list category-list">{orderedCategories.map((category) => <li className={`entry-row ${category.parent_id ? 'child-row' : ''}`} key={category.id}>
                     <div className={`entry-icon ${category.parent_id ? 'child-icon' : 'category-icon'}`} aria-hidden="true">{category.parent_id ? '↳' : 'C'}</div>
-                    <div className="entry-main">{editing === category.id ? <NameEditor label={`category-${category.id}`} initialName={category.name} busy={busy} onCancel={() => setEditing(null)} onSave={async (name) => { await run(() => renameCategory(category.id, name), 'Catégorie renommée.') }} /> : <><strong>{category.name}</strong><span>{category.parent_id ? `Sous-catégorie de ${category.parent_name}` : 'Catégorie principale'}</span></>}</div>
+                    <div className="entry-main">{editing === category.id ? <NameEditor label={`category-${category.id}`} initialName={category.name} busy={busy} onCancel={() => setEditing(null)} onSave={async (name) => { await run(() => renameCategory(category.id, name), 'Catégorie renommée.') }} /> : <><strong>{category.name}</strong><span>{category.parent_id ? `Sous-catégorie de ${category.parent_name}` : 'Catégorie principale'}{category.retention_years ? ` · Rétention ${category.retention_years} an(s)` : ' · Conservation indéfinie'}</span></>}</div>
                     {editing !== category.id && <button className="button button-quiet button-small" type="button" onClick={() => setEditing(category.id)} aria-label={`Renommer ${category.name}`}>Renommer</button>}
                   </li>)}</ul>
                 )}

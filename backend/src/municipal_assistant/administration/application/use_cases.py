@@ -60,7 +60,8 @@ class CatalogUseCases:
                 raise InvalidCatalogEntry("Only top-level categories can have subcategories")
         return self.repository.list_categories(parent_id=parent_id, filter_by_parent=filter_by_parent)
 
-    def create_category(self, *, parent_id: UUID | None, name: str, actor_id: UUID) -> Category:
+    def create_category(self, *, parent_id: UUID | None, name: str, actor_id: UUID,
+                        retention_years: int | None = None) -> Category:
         if parent_id is not None:
             parent = self.repository.get_category(parent_id)
             if parent is None:
@@ -69,12 +70,25 @@ class CatalogUseCases:
                 raise InvalidCatalogEntry("Only top-level categories can have subcategories")
         display, normalized = normalize_catalog_name(name)
         return self.repository.create_category(parent_id=parent_id, name=display,
-            normalized_name=normalized, actor_id=actor_id)
+            normalized_name=normalized, actor_id=actor_id, retention_years=retention_years)
 
     def rename_category(self, category_id: UUID, *, name: str, actor_id: UUID) -> Category:
         display, normalized = normalize_catalog_name(name)
         return self.repository.rename_category(category_id, name=display,
             normalized_name=normalized, actor_id=actor_id)
+
+    def update_category(self, category_id: UUID, *, name: str | None = None,
+                        retention_years: int | None = None, update_retention: bool = False,
+                        actor_id: UUID) -> Category:
+        category = self.repository.get_category(category_id)
+        if category is None:
+            raise CatalogEntryNotFound("Category was not found")
+        if name is None:
+            name = category.name
+        display, normalized = normalize_catalog_name(name)
+        return self.repository.rename_category(category_id, name=display,
+            normalized_name=normalized, actor_id=actor_id, retention_years=retention_years,
+            update_retention=update_retention)
 
     def service_exists(self, service_id: UUID) -> bool:
         return self.repository.service_exists(service_id)

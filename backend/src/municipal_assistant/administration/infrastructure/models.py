@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import uuid4
 
-from sqlalchemy import DateTime, ForeignKey, Index, String, func, text
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, func, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -65,6 +65,7 @@ class CategoryRow(Base):
         server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False,
         server_default=func.now(), onupdate=func.now())
+    retention_years: Mapped[int | None] = mapped_column(Integer)
 
 
 class CatalogAuditRow(Base):

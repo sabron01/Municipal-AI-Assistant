@@ -5,7 +5,7 @@ from uuid import UUID, uuid4
 
 from ..domain.entities import Document, DocumentStatus, DocumentVersion, VersionState, validate_metadata
 from ..domain.errors import (ConcurrentModification, DependencyUnavailable, DocumentNotFound,
-                             InvalidDocument, InvalidUpload)
+                             DocumentNotDeleted, InvalidDocument, InvalidUpload)
 from ..domain.ports import (CategoryDirectory, DocumentAccessPolicy, DocumentQuery, ObjectStorage,
                             ServiceDirectory, UnitOfWork, UploadValidator)
 from ..domain.value_objects import CategoryId, DocumentId, ObjectKey, ServiceId, VersionId
@@ -204,6 +204,37 @@ class DocumentService:
             uow.audit.record(actor_id=actor_id, action="document.soft_deleted", document_id=document_id)
             uow.commit()
 
+    def restore(self, document_id: DocumentId, actor_id: UUID, expected_version: int) -> Document:
+        with self.uow_factory() as uow:
+            document = self._get(uow, document_id, include_deleted=True)
+            self._authorize(actor_id, "document.restore", document, write=True)
+            if document.aggregate_version != expected_version:
+                raise ConcurrentModification("Document version does not match If-Match")
+            document.restore(datetime.now(timezone.utc))
+            uow.documents.save(document, expected_aggregate_version=expected_version)
+            uow.audit.record(actor_id=actor_id, action="document.restored", document_id=document_id)
+            uow.commit()
+            return document
+
+    def purge(self, document_id: DocumentId, actor_id: UUID, expected_version: int) -> None:
+        with self.uow_factory() as uow:
+            document = self._get(uow, document_id, include_deleted=True)
+            self._authorize(actor_id, "document.purge", document, write=True)
+            if document.status is not DocumentStatus.DELETED:
+                raise DocumentNotDeleted("Document must be deleted before purge")
+            if document.aggregate_version != expected_version:
+                raise ConcurrentModification("Document version does not match If-Match")
+            versions = list(document.versions)
+        for version in versions:
+            try:
+                self.storage.delete(version.object_key)
+            except Exception:
+                pass
+        with self.uow_factory() as uow:
+            uow.documents.purge(document_id)
+            uow.audit.record(actor_id=actor_id, action="document.purged", document_id=None)
+            uow.commit()
+
     def reconcile_pending_uploads(self) -> int:
         """Idempotently finish committed reservations whose object was already uploaded."""
         with self.uow_factory() as uow:
@@ -264,8 +295,9 @@ class DocumentService:
             raise
 
     @staticmethod
-    def _get(uow, document_id: DocumentId, *, include_pending: bool = False) -> Document:
-        document = uow.documents.get(document_id, include_deleted=include_pending)
+    def _get(uow, document_id: DocumentId, *, include_pending: bool = False,
+             include_deleted: bool = False) -> Document:
+        document = uow.documents.get(document_id, include_deleted=include_pending or include_deleted)
         if document is None:
             raise DocumentNotFound("Document was not found")
         return document

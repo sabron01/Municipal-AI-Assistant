@@ -15,6 +15,13 @@ class ServiceCreateIn(NameIn):
 
 class CategoryCreateIn(NameIn):
     parent_id: UUID | None = None
+    retention_years: int | None = Field(default=None, ge=1)
+
+
+class CategoryUpdateIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    retention_years: int | None = Field(default=None, ge=1)
 
 
 class DirectionOut(BaseModel):
@@ -40,3 +47,4 @@ class CategoryOut(BaseModel):
     parent_name: str | None
     name: str
     created_at: datetime
+    retention_years: int | None

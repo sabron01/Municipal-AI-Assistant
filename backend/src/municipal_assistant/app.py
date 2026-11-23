@@ -10,7 +10,7 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 from .documents.domain.errors import (AccessPolicyUnavailable, ConcurrentModification, DependencyUnavailable,
     DocumentError,
     DocumentDeleted, DocumentNotFound, InvalidDocument, InvalidPageCursor, InvalidUpload,
-    ReferenceConflict, UnsupportedMediaType, UploadTooLarge)
+    DocumentNotDeleted, ReferenceConflict, UnsupportedMediaType, UploadTooLarge)
 from .documents.presentation.router import router as documents_router
 from .accounts.composition import build_account_service
 from .accounts.router import router as accounts_router
@@ -141,7 +141,7 @@ def create_app() -> FastAPI:
         elif isinstance(exc, DependencyUnavailable): status_code, title, detail = 503, "Dependency unavailable", str(exc)
         elif isinstance(exc, DocumentNotFound | DocumentDeleted): status_code, title, detail = 404, "Not Found", "Document was not found."
         elif isinstance(exc, ConcurrentModification): status_code, title, detail = 412, "Precondition Failed", str(exc)
-        elif isinstance(exc, ReferenceConflict): status_code, title, detail = 409, "Conflict", str(exc) or "A document with this reference number already exists."
+        elif isinstance(exc, DocumentNotDeleted | ReferenceConflict): status_code, title, detail = 409, "Conflict", str(exc) or "Conflict"
         elif isinstance(exc, UploadTooLarge): status_code, title, detail = 413, "Content Too Large", str(exc)
         elif isinstance(exc, UnsupportedMediaType): status_code, title, detail = 415, "Unsupported Media Type", str(exc)
         elif isinstance(exc, InvalidUpload): status_code, title, detail = 400, "Invalid Upload", str(exc)

@@ -4,7 +4,7 @@ from enum import StrEnum
 from unicodedata import normalize as normalize_unicode
 from uuid import UUID
 
-from .errors import ConcurrentModification, DocumentDeleted, InvalidDocument
+from .errors import ConcurrentModification, DocumentDeleted, DocumentNotDeleted, InvalidDocument
 from .value_objects import CategoryId, DocumentId, ObjectKey, ServiceId, Sha256, VersionId
 
 MAX_KEYWORDS = 20
@@ -115,6 +115,17 @@ class Document:
         self.status = DocumentStatus.DELETED
         self.deleted_at = at
         self.deleted_by = actor_id
+        self.updated_at = at
+        self.aggregate_version += 1
+
+    def restore(self, at: datetime) -> None:
+        if at.tzinfo is None:
+            raise InvalidDocument("Timestamps must be timezone-aware")
+        if self.status is not DocumentStatus.DELETED:
+            raise DocumentNotDeleted("Document is not deleted")
+        self.status = DocumentStatus.ACTIVE
+        self.deleted_at = None
+        self.deleted_by = None
         self.updated_at = at
         self.aggregate_version += 1
 

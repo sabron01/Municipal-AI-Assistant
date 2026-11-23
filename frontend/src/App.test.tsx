@@ -39,11 +39,11 @@ const budget = {
 }
 const rootCategory = {
   id: 'cat-1', parent_id: null, parent_name: null,
-  name: 'Ressources humaines', created_at: '2026-11-23T08:00:00Z',
+  name: 'Ressources humaines', created_at: '2026-11-23T08:00:00Z', retention_years: null,
 }
 const childCategory = {
   id: 'cat-2', parent_id: 'cat-1', parent_name: 'Ressources humaines',
-  name: 'Recrutement', created_at: '2026-11-23T08:00:00Z',
+  name: 'Recrutement', created_at: '2026-11-23T08:00:00Z', retention_years: 5,
 }
 
 function authenticatedCatalog() {

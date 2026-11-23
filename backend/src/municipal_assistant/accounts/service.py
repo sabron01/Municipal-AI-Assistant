@@ -16,6 +16,7 @@ from .settings import AccountSettings
 PERMISSIONS = frozenset({
     "document.read", "document.create", "document.version_add",
     "document.metadata_update", "document.soft_delete",
+    "document.restore", "document.purge",
 })
 
 
