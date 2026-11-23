@@ -4,15 +4,17 @@ Monorepo et **monolithe modulaire DDD**, avec PostgreSQL + pgvector, RustFS, Oll
 
 ## Statut
 - Socle local : démarré et vérifié le 2026-11-22 (PostgreSQL, RustFS, Ollama, API FastAPI).
-- Module Documents v1 : backend, contrôle d'accès par service et registre Direction/Service/Catégorie implémentés sur `feat/documents-v1`; l’interface React d’administration du registre est implémentée, la revue QA et les tests frontend restent à compléter.
+- Module Documents v1 : backend, contrôle d'accès par service et registre Direction/Service/Catégorie implémentés sur `feat/documents-v1`; l’interface React d’administration du registre est implémentée et couverte par des tests frontend, la revue QA reste à compléter.
 - Authentification : comptes applicatifs et permissions par action implémentés; l'administrateur initial local est activé, avec Mailpit pour les courriels de développement.
 - Modèles LLM / embeddings : benchmark à réaliser avant sélection.
 - Interface React : écran d’administration du registre implémenté; l’interface Documents et le dépôt de fichiers ne sont pas encore couverts.
-- Sauvegardes : non configurées ni testées.
+- Sauvegardes : procédure PostgreSQL + RustFS définie, scriptée et vérifiée localement le 2026-11-23 (voir `docs/deployment/backup-restore.md`); la fréquence et la rétention restent à décider.
+- Intégration continue : workflow GitHub Actions backend (tests unitaires + intégration PostgreSQL/RustFS) et frontend (lint, tests, build) défini dans `.github/workflows/ci.yml`; première exécution sur GitHub à venir.
 
 ## Structure
-- `backend/` : API FastAPI, module Documents v1, migration Alembic et tests unitaires.
-- `frontend/` : emplacement prévu pour React + TypeScript.
+- `backend/` : API FastAPI, module Documents v1, migration Alembic et tests unitaires et d'intégration.
+- `frontend/` : interface React + TypeScript du registre (Vite, tests Vitest).
+- `scripts/` : sauvegarde et restauration PostgreSQL + RustFS.
 - `mcp/` : serveurs MCP internes uniquement.
 - `infrastructure/` : configuration et scripts d'infrastructure.
 - `docs/` : architecture, décisions, sécurité, benchmark et spécification documentaire.

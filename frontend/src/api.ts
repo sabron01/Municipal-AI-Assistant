@@ -136,8 +136,17 @@ export function renameService(serviceId: string, name: string) {
   })
 }
 
-export function listCategories() {
-  return request<Category[]>('/admin/catalog/categories')
+export type CategoryQuery = {
+  rootsOnly?: boolean
+  parentId?: string
+}
+
+export function listCategories(options: CategoryQuery = {}) {
+  const params = new URLSearchParams()
+  if (options.rootsOnly) params.set('roots_only', 'true')
+  if (options.parentId) params.set('parent_id', options.parentId)
+  const query = params.toString()
+  return request<Category[]>(`/admin/catalog/categories${query ? `?${query}` : ''}`)
 }
 
 export function createCategory(parentId: string | null, name: string) {
